@@ -44,6 +44,7 @@ import io.confluent.ksql.rest.server.computation.QueuedCommandStatus;
 import io.confluent.ksql.rest.server.context.KsqlRestServiceContextBinder;
 import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
 import io.confluent.ksql.rest.server.resources.KsqlResource;
+import io.confluent.ksql.rest.server.resources.PullQueryResource;
 import io.confluent.ksql.rest.server.resources.RootDocument;
 import io.confluent.ksql.rest.server.resources.StatusResource;
 import io.confluent.ksql.rest.server.resources.streaming.StreamedQueryResource;
@@ -100,6 +101,8 @@ public class KsqlRestApplicationTest {
   private StatusResource statusResource;
   @Mock
   private StreamedQueryResource streamedQueryResource;
+  @Mock
+  private PullQueryResource pullQueryResource;
   @Mock
   private KsqlResource ksqlResource;
   @Mock
@@ -170,6 +173,7 @@ public class KsqlRestApplicationTest {
         rootDocument,
         statusResource,
         streamedQueryResource,
+        pullQueryResource,
         ksqlResource,
         versionCheckerAgent,
         KsqlRestServiceContextBinder::new,
@@ -177,7 +181,7 @@ public class KsqlRestApplicationTest {
         serverState,
         processingLogContext,
         ImmutableList.of(precondition1, precondition2),
-        ImmutableList.of(ksqlResource, streamedQueryResource),
+        ImmutableList.of(ksqlResource, streamedQueryResource,pullQueryResource),
         rocksDBConfigSetterHandler
     );
   }

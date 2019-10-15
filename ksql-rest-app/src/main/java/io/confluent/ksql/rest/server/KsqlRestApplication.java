@@ -49,6 +49,7 @@ import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
 import io.confluent.ksql.rest.server.resources.KsqlConfigurable;
 import io.confluent.ksql.rest.server.resources.KsqlExceptionMapper;
 import io.confluent.ksql.rest.server.resources.KsqlResource;
+import io.confluent.ksql.rest.server.resources.PullQueryResource;
 import io.confluent.ksql.rest.server.resources.RootDocument;
 import io.confluent.ksql.rest.server.resources.ServerInfoResource;
 import io.confluent.ksql.rest.server.resources.ServerMetadataResource;
@@ -132,6 +133,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
   private final RootDocument rootDocument;
   private final StatusResource statusResource;
   private final StreamedQueryResource streamedQueryResource;
+  private final PullQueryResource pullQueryResource;
   private final KsqlResource ksqlResource;
   private final VersionCheckerAgent versionCheckerAgent;
   private final ServiceContext serviceContext;
@@ -160,6 +162,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
       final RootDocument rootDocument,
       final StatusResource statusResource,
       final StreamedQueryResource streamedQueryResource,
+      final PullQueryResource pullQueryResource,
       final KsqlResource ksqlResource,
       final VersionCheckerAgent versionCheckerAgent,
       final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder> serviceContextBinderFactory,
@@ -179,6 +182,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
     this.rootDocument = requireNonNull(rootDocument, "rootDocument");
     this.statusResource = requireNonNull(statusResource, "statusResource");
     this.streamedQueryResource = requireNonNull(streamedQueryResource, "streamedQueryResource");
+    this.pullQueryResource = requireNonNull(pullQueryResource, "pullQueryResource");
     this.ksqlResource = requireNonNull(ksqlResource, "ksqlResource");
     this.commandStore = requireNonNull(commandStore, "commandStore");
     this.serverState = requireNonNull(serverState, "serverState");
@@ -201,6 +205,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
     config.register(statusResource);
     config.register(ksqlResource);
     config.register(streamedQueryResource);
+    config.register(pullQueryResource);
     config.register(new KsqlExceptionMapper());
     config.register(new ServerStateDynamicBinding(serverState));
   }
@@ -502,6 +507,16 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
         authorizationValidator
     );
 
+    final PullQueryResource pullQueryResource = new PullQueryResource(
+        ksqlEngine,
+        commandStore,
+        Duration.ofMillis(
+            restConfig.getLong(KsqlRestConfig.STREAMED_QUERY_DISCONNECT_CHECK_MS_CONFIG)),
+        Duration.ofMillis(restConfig.getLong(DISTRIBUTED_COMMAND_RESPONSE_TIMEOUT_MS_CONFIG)),
+        versionChecker::updateLastRequestTime,
+        authorizationValidator
+    );
+
     final KsqlResource ksqlResource = new KsqlResource(
         ksqlEngine,
         commandStore,
@@ -531,6 +546,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
     final List<KsqlConfigurable> configurables = ImmutableList.of(
         ksqlResource,
         streamedQueryResource,
+        pullQueryResource,
         statementExecutor
     );
 
@@ -547,6 +563,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
         rootDocument,
         statusResource,
         streamedQueryResource,
+        pullQueryResource,
         ksqlResource,
         versionChecker,
         serviceContextBinderFactory,
