@@ -33,6 +33,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.confluent.ksql.execution.function.TableAggregationFunction;
 import io.confluent.ksql.function.udaf.TestUdaf;
 import io.confluent.ksql.function.udaf.Udaf;
+import io.confluent.ksql.function.udaf.UdafFactory;
 import io.confluent.ksql.function.udf.Kudf;
 import io.confluent.ksql.function.udf.PluggableUdf;
 import io.confluent.ksql.function.udf.Udf;
@@ -807,6 +808,56 @@ public class UdfLoaderTest {
     assertThat(metric.metricValue(), equalTo(2.0));
   }
 
+  @Test
+  public void shouldThrowIfUdfSchemaAndInputTypeDiffer() throws Exception {
+
+    final MutableFunctionRegistry functionRegistry = new InternalFunctionRegistry();
+    final Path udfJar = new File("src/test/resources/udf-failing-tests.jar").toPath();
+    final UdfClassLoader udfClassLoader = UdfClassLoader.newClassLoader(udfJar,
+                                                                        PARENT_CLASS_LOADER,
+                                                                        resourceName -> false);
+    Class<?> clazz = udfClassLoader.loadClass("org.damian.ksql.udf.IncompatibleInputSchemaUdf");
+    final UdfLoader udfLoader = new UdfLoader(functionRegistry,
+                                              new File("src/test/resources/udf-failing-tests.jar"),
+                                              udfClassLoader,
+                                              value -> false,
+                                              Optional.empty(),
+                                              true);
+
+    // Expect:
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage(is("The schema in @UdfParameter does not match the method "
+                                           + "parameter for UDF IncompatibleInputSchemaUdf:foo"));
+
+    // When:
+    udfLoader.loadUdfFromClass(clazz);
+  }
+
+  @Test
+  public void shouldThrowIfUdfSchemaAndReturnTypeDiffer() throws Exception {
+
+    final MutableFunctionRegistry functionRegistry = new InternalFunctionRegistry();
+    final Path udfJar = new File("src/test/resources/udf-failing-tests.jar").toPath();
+    final UdfClassLoader udfClassLoader = UdfClassLoader.newClassLoader(udfJar,
+                                                                        PARENT_CLASS_LOADER,
+                                                                        resourceName -> false);
+    Class<?> clazz = udfClassLoader.loadClass("org.damian.ksql.udf.IncompatibleReturnSchemaUdf");
+    final UdfLoader udfLoader = new UdfLoader(functionRegistry,
+                                              new File("src/test/resources/udf-failing-tests.jar"),
+                                              udfClassLoader,
+                                              value -> false,
+                                              Optional.empty(),
+                                              true);
+
+    // Expect:
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage(is("The schema in @Udf does not match the method "
+                                           + "return type for UDF IncompatibleReturnSchemaUdf:foo"));
+
+    // When:
+    udfLoader.loadUdfFromClass(clazz);
+  }
+
   @Test(expected = KsqlException.class)
   public void shouldThrowIfUnsupportedArgumentType() throws Exception {
     UdfLoader.createUdfInvoker(
@@ -907,7 +958,10 @@ public class UdfLoaderTest {
   @Test
   public void shouldThrowWhenUdafReturnTypeIsntAUdaf() throws Exception {
     expectedException.expect(KsqlException.class);
-    expectedException.expectMessage("UDAFs must implement io.confluent.ksql.function.udaf.Udaf or io.confluent.ksql.function.udaf.TableUdaf. method='createBlah', functionName='`test`', UDFClass='class io.confluent.ksql.function.UdfLoaderTest");
+    expectedException.expectMessage("UDAFs must implement io.confluent.ksql.function.udaf.Udaf or "
+                                        + "io.confluent.ksql.function.udaf.TableUdaf. "
+                                        + "method='createBlah', functionName='test', "
+                                        + "UDFClass='class io.confluent.ksql.function.UdfLoaderTest");
     createUdfLoader().createUdafFactoryInvoker(UdfLoaderTest.class.getMethod("createBlah"),
         FunctionName.of("test"),
         "desc",
@@ -1011,7 +1065,15 @@ public class UdfLoaderTest {
 
     // Expect:
     expectedException.expect(KsqlException.class);
-    expectedException.expectMessage("class='class java.lang.Character' is not supported by UDAFs");
+    expectedException.expectMessage("class='class java.lang.Character' is not supported by UDAF "
+                                        + "methods. Supported types [int, long, double, boolean, "
+                                        + "class java.lang.Integer, class java.lang.Long, "
+                                        + "class java.lang.Double, class java.math.BigDecimal, "
+                                        + "class java.lang.Boolean, class java.lang.String, "
+                                        + "class org.apache.kafka.connect.data.Struct, "
+                                        + "interface java.util.List, interface java.util.Map]. "
+                                        + "method=createBad, class=class "
+                                        + "io.confluent.ksql.function.UdfLoaderTest");
 
 
     createUdfLoader().createUdafFactoryInvoker(UdfLoaderTest.class.getMethod("createBad"),
@@ -1154,6 +1216,11 @@ public class UdfLoaderTest {
     return null;
   }
 
+  @UdafFactory(
+      description = "test struct parameters.",
+      paramSchema = "STRUCT<SUM bigint, COUNT bigint>",
+      aggregateSchema = "STRUCT<SUM bigint, COUNT bigint>",
+      returnSchema = "STRUCT<SUM bigint, COUNT bigint>")
   public static Udaf<Struct, Struct, Struct> createStructStruct() {
     return null;
   }
@@ -1175,6 +1242,10 @@ public class UdfLoaderTest {
   }
 
   public static String invalidUdf(final int[] ints, final int... moreInts) {
+    return null;
+  }
+
+  public static String invalidUdf(@UdfParameter(schema = "ARRAY<VARCHAR>") final List<Integer> param) {
     return null;
   }
 
@@ -1206,6 +1277,17 @@ public class UdfLoaderTest {
         new Blacklist(new File(pluginDir, "resource-blacklist.txt")),
         metrics,
         true
+    );
+  }
+
+  private static UdfLoader createEmptyUdfLoader(Optional<Metrics> metrics) {
+    final File pluginDir = new File("");
+    return new UdfLoader(new InternalFunctionRegistry(),
+                         pluginDir,
+                         Thread.currentThread().getContextClassLoader(),
+                         new Blacklist(new File(pluginDir, "resource-blacklist.txt")),
+                         metrics,
+                         true
     );
   }
 

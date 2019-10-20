@@ -17,6 +17,7 @@ package io.confluent.ksql.function;
 
 import com.google.common.collect.ImmutableSet;
 import io.confluent.ksql.execution.function.UdfUtil;
+import io.confluent.ksql.function.udaf.UdafFactory;
 import io.confluent.ksql.schema.ksql.SchemaConverters;
 import io.confluent.ksql.schema.ksql.SqlTypeParser;
 import io.confluent.ksql.util.KsqlException;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -57,6 +59,7 @@ class UdafTypes {
   private final String functionInfo;
   private final String invalidClassErrorMsg;
   private final SqlTypeParser sqlTypeParser;
+  private final Optional<UdafFactory> annotation;
 
   UdafTypes(
       final Method method,
@@ -72,6 +75,8 @@ class UdafTypes {
         = (AnnotatedParameterizedType) method.getAnnotatedReturnType();
     final ParameterizedType type = (ParameterizedType) annotatedReturnType.getType();
     this.sqlTypeParser = Objects.requireNonNull(sqlTypeParser);
+    this.annotation = method.getAnnotation(UdafFactory.class) == null
+        ? Optional.empty() : Optional.of(method.getAnnotation(UdafFactory.class));
 
     inputType = type.getActualTypeArguments()[0];
     aggregateType = type.getActualTypeArguments()[1];
@@ -93,9 +98,16 @@ class UdafTypes {
     return inputSchema;
   }
 
-  Schema getAggregateSchema(final String aggSchema) {
-    validateStructAnnotation(aggregateType, aggSchema, "aggregateSchema");
-    return getSchemaFromType(aggregateType, aggSchema);
+  Schema getAggregateSchema() {
+    final Optional<String> aggSchema = annotation.map(UdafFactory::aggregateSchema).filter(
+        val -> !val.isEmpty());
+
+    UdfSignatureValidator.validateStructAnnotation(
+        aggregateType,
+        aggSchema,
+        String.format(UdfSignatureValidator.missingStructErrorMsgUdaf,"aggregateSchema"));
+
+    return getSchemaOfInputParameter(aggregateType, aggSchema, "aggregateSchema", "", sqlTypeParser);
   }
 
   Schema getOutputSchema(final String outSchema) {
@@ -148,6 +160,24 @@ class UdafTypes {
           )
       );
     }
+  }
+
+  static Schema getSchemaOfInputParameter(
+      final Type type,
+      final Optional<String> paramSchema,
+      final String paramName,
+      final String paramDoc,
+      final SqlTypeParser typeParser) {
+
+    Objects.requireNonNull(paramName);
+    Objects.requireNonNull(paramDoc);
+
+    if (paramSchema.isPresent()) {
+      return SchemaConverters.sqlToConnectConverter().toConnectSchema(
+          typeParser.parse(paramSchema.get()).getSqlType(), paramName, paramDoc);
+    }
+
+    return UdfUtil.getSchemaFromType(type, paramName, paramDoc);
   }
 
 }

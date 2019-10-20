@@ -21,7 +21,6 @@ import io.confluent.ksql.name.FunctionName;
 import io.confluent.ksql.schema.ksql.SqlTypeParser;
 import io.confluent.ksql.util.KsqlException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -49,20 +48,11 @@ class UdafFactoryInvoker implements FunctionSignature {
       final SqlTypeParser typeParser,
       final Optional<Metrics> metrics
   ) {
-    if (!(Udaf.class.equals(method.getReturnType())
-        || TableUdaf.class.equals(method.getReturnType()))) {
-      final String functionInfo = String.format("method='%s', functionName='%s', UDFClass='%s'",
-          method.getName(), functionName, method.getDeclaringClass());
-      throw new KsqlException("UDAFs must implement " + Udaf.class.getName() + " or "
-          + TableUdaf.class.getName() + ". "
-          + functionInfo);
-    }
-    if (!Modifier.isStatic(method.getModifiers())) {
-      throw new KsqlException("UDAF factory methods must be static " + method);
-    }
+    UdfSignatureValidator.validateUdafMethodSignature(method, functionName.name());
+    UdfSignatureValidator.validateUdafParameterTypes(method);
     final UdafTypes types = new UdafTypes(method, functionName.name(), typeParser);
     this.functionName = Objects.requireNonNull(functionName);
-    this.aggregateArgType = Objects.requireNonNull(types.getAggregateSchema(aggregateSchema));
+    this.aggregateArgType = Objects.requireNonNull(types.getAggregateSchema());
     this.aggregateReturnType = Objects.requireNonNull(types.getOutputSchema(outputSchema));
     this.metrics = Objects.requireNonNull(metrics);
     this.argTypes =
