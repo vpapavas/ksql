@@ -98,16 +98,9 @@ class UdafTypes {
     return inputSchema;
   }
 
-  Schema getAggregateSchema() {
-    final Optional<String> aggSchema = annotation.map(UdafFactory::aggregateSchema).filter(
-        val -> !val.isEmpty());
-
-    UdfSignatureValidator.validateStructAnnotation(
-        aggregateType,
-        aggSchema,
-        String.format(UdfSignatureValidator.missingStructErrorMsgUdaf,"aggregateSchema"));
-
-    return getSchemaOfInputParameter(aggregateType, aggSchema, "aggregateSchema", "", sqlTypeParser);
+  Schema getAggregateSchema(final String aggSchema) {
+    validateStructAnnotation(aggregateType, aggSchema, "aggregateSchema");
+    return getSchemaFromType(aggregateType, aggSchema);
   }
 
   Schema getOutputSchema(final String outSchema) {
@@ -160,24 +153,6 @@ class UdafTypes {
           )
       );
     }
-  }
-
-  static Schema getSchemaOfInputParameter(
-      final Type type,
-      final Optional<String> paramSchema,
-      final String paramName,
-      final String paramDoc,
-      final SqlTypeParser typeParser) {
-
-    Objects.requireNonNull(paramName);
-    Objects.requireNonNull(paramDoc);
-
-    if (paramSchema.isPresent()) {
-      return SchemaConverters.sqlToConnectConverter().toConnectSchema(
-          typeParser.parse(paramSchema.get()).getSqlType(), paramName, paramDoc);
-    }
-
-    return UdfUtil.getSchemaFromType(type, paramName, paramDoc);
   }
 
 }

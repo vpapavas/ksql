@@ -48,11 +48,9 @@ class UdafFactoryInvoker implements FunctionSignature {
       final SqlTypeParser typeParser,
       final Optional<Metrics> metrics
   ) {
-    UdfSignatureValidator.validateUdafMethodSignature(method, functionName.name());
-    UdfSignatureValidator.validateUdafParameterTypes(method);
     final UdafTypes types = new UdafTypes(method, functionName.name(), typeParser);
     this.functionName = Objects.requireNonNull(functionName);
-    this.aggregateArgType = Objects.requireNonNull(types.getAggregateSchema());
+    this.aggregateArgType = Objects.requireNonNull(types.getAggregateSchema(aggregateSchema));
     this.aggregateReturnType = Objects.requireNonNull(types.getOutputSchema(outputSchema));
     this.metrics = Objects.requireNonNull(metrics);
     this.argTypes =

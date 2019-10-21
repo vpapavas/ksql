@@ -46,12 +46,6 @@ public class DynamicUdfInvoker implements UdfInvoker {
     this.method = method;
   }
 
-  DynamicUdfInvoker(final Method method, final String functionName) {
-    UdfSignatureValidator.validateUdfMethodSignature(method);
-    UdfSignatureValidator.validateUdfParameterTypes(method);
-    this.method = method;
-  }
-
   @Override
   public Object eval(final Object udf, final Object... args) {
     try {
