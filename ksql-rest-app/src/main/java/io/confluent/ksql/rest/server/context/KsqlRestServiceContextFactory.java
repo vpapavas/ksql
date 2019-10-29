@@ -37,13 +37,16 @@ import org.glassfish.hk2.api.Factory;
  * a new {@link ServiceContext} during REST requests.
  */
 public class KsqlRestServiceContextFactory implements Factory<ServiceContext> {
+  private static ServiceContext defaultServiceContext;
   private static KsqlConfig ksqlConfig;
   private static KsqlSecurityExtension securityExtension;
 
   public static void configure(
+      final ServiceContext serviceContext,
       final KsqlConfig ksqlConfig,
       final KsqlSecurityExtension securityExtension
   ) {
+    KsqlRestServiceContextFactory.defaultServiceContext = serviceContext;
     KsqlRestServiceContextFactory.ksqlConfig = requireNonNull(ksqlConfig, "ksqlConfig");
     KsqlRestServiceContextFactory.securityExtension
         = requireNonNull(securityExtension, "securityExtension");
@@ -88,7 +91,7 @@ public class KsqlRestServiceContextFactory implements Factory<ServiceContext> {
         Optional.ofNullable(request.getHeader(HttpHeaders.AUTHORIZATION));
 
     if (!securityExtension.getUserContextProvider().isPresent()) {
-      return defaultServiceContextFactory.create(ksqlConfig, authHeader);
+      return defaultServiceContext;
     }
 
     final Principal principal = securityContext.getUserPrincipal();
@@ -104,6 +107,8 @@ public class KsqlRestServiceContextFactory implements Factory<ServiceContext> {
 
   @Override
   public void dispose(final ServiceContext serviceContext) {
-    serviceContext.close();
+    if (serviceContext != defaultServiceContext) {
+      serviceContext.close();
+    }
   }
 }

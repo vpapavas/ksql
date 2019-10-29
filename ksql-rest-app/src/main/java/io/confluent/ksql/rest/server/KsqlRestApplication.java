@@ -45,6 +45,7 @@ import io.confluent.ksql.rest.server.computation.CommandRunner;
 import io.confluent.ksql.rest.server.computation.CommandStore;
 import io.confluent.ksql.rest.server.computation.StatementExecutor;
 import io.confluent.ksql.rest.server.context.KsqlRestServiceContextBinder;
+import io.confluent.ksql.rest.server.context.ServiceContextBinderFunction;
 import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
 import io.confluent.ksql.rest.server.resources.HealthCheckResource;
 import io.confluent.ksql.rest.server.resources.KsqlConfigurable;
@@ -97,7 +98,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Executors;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -113,7 +113,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.log4j.LogManager;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.websocket.jsr356.server.ServerContainer;
-import org.glassfish.hk2.utilities.Binder;
 import org.glassfish.jersey.server.ServerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,7 +135,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
   private final KsqlResource ksqlResource;
   private final VersionCheckerAgent versionCheckerAgent;
   private final ServiceContext serviceContext;
-  private final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder>  serviceContextBinderFactory;
+  private final ServiceContextBinderFunction serviceContextBinderFactory;
   private final KsqlSecurityExtension securityExtension;
   private final ServerState serverState;
   private final ProcessingLogContext processingLogContext;
@@ -163,7 +162,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
       final StreamedQueryResource streamedQueryResource,
       final KsqlResource ksqlResource,
       final VersionCheckerAgent versionCheckerAgent,
-      final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder> serviceContextBinderFactory,
+      final ServiceContextBinderFunction serviceContextBinderFactory,
       final KsqlSecurityExtension securityExtension,
       final ServerState serverState,
       final ProcessingLogContext processingLogContext,
@@ -351,7 +350,8 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
         new JacksonMessageBodyProvider(JsonMapper.INSTANCE.mapper);
     config.register(jsonProvider);
     config.register(JsonParseExceptionMapper.class);
-    config.register(serviceContextBinderFactory.apply(ksqlConfigNoPort, securityExtension));
+    config.register(serviceContextBinderFactory.apply(serviceContext, ksqlConfigNoPort,
+                                                      securityExtension));
 
     // Don't want to buffer rows when streaming JSON in a request to the query resource
     config.property(ServerProperties.OUTBOUND_CONTENT_LENGTH_BUFFER, 0);
@@ -437,7 +437,7 @@ public final class KsqlRestApplication extends Application<KsqlRestConfig> imple
       final Function<Supplier<Boolean>, VersionCheckerAgent> versionCheckerFactory,
       final int maxStatementRetries,
       final ServiceContext serviceContext,
-      final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder> serviceContextBinderFactory
+      final ServiceContextBinderFunction serviceContextBinderFactory
   ) {
     final String ksqlInstallDir = restConfig.getString(KsqlRestConfig.INSTALL_DIR_CONFIG);
 

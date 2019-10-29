@@ -30,10 +30,11 @@ import org.glassfish.jersey.process.internal.RequestScoped;
  */
 public class KsqlRestServiceContextBinder extends AbstractBinder {
   public KsqlRestServiceContextBinder(
+      final ServiceContext serviceContext,
       final KsqlConfig ksqlConfig,
       final KsqlSecurityExtension securityExtension
   ) {
-    KsqlRestServiceContextFactory.configure(ksqlConfig, securityExtension);
+    KsqlRestServiceContextFactory.configure(serviceContext, ksqlConfig, securityExtension);
   }
 
   @Override

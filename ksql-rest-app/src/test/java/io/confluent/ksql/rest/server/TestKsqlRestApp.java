@@ -35,8 +35,8 @@ import io.confluent.ksql.rest.entity.SourceInfo;
 import io.confluent.ksql.rest.entity.StreamsList;
 import io.confluent.ksql.rest.entity.TablesList;
 import io.confluent.ksql.rest.server.context.KsqlRestServiceContextBinder;
+import io.confluent.ksql.rest.server.context.ServiceContextBinderFunction;
 import io.confluent.ksql.rest.util.KsqlInternalTopicUtils;
-import io.confluent.ksql.security.KsqlSecurityExtension;
 import io.confluent.ksql.services.DisabledKsqlClient;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.services.ServiceContextFactory;
@@ -57,7 +57,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.ws.rs.client.Client;
@@ -65,7 +64,6 @@ import javax.ws.rs.client.ClientBuilder;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.eclipse.jetty.websocket.api.util.WSURI;
 import org.glassfish.hk2.api.Factory;
-import org.glassfish.hk2.utilities.Binder;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.process.internal.RequestScoped;
 import org.junit.rules.ExternalResource;
@@ -94,7 +92,7 @@ public class TestKsqlRestApp extends ExternalResource {
   private final Map<String, ?> baseConfig;
   private final Supplier<String> bootstrapServers;
   private final Supplier<ServiceContext> serviceContext;
-  private final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder> serviceContextBinderFactory;
+  private final ServiceContextBinderFunction serviceContextBinderFactory;
   private final List<URL> listeners = new ArrayList<>();
   private final Optional<BasicCredentials> credentials;
   private KsqlRestApplication restServer;
@@ -103,7 +101,7 @@ public class TestKsqlRestApp extends ExternalResource {
       final Supplier<String> bootstrapServers,
       final Map<String, Object> additionalProps,
       final Supplier<ServiceContext> serviceContext,
-      final BiFunction<KsqlConfig, KsqlSecurityExtension, Binder> serviceContextBinderFactory,
+      final ServiceContextBinderFunction serviceContextBinderFactory,
       final Optional<BasicCredentials> credentials
   ) {
     this.baseConfig = buildBaseConfig(additionalProps);
@@ -412,7 +410,7 @@ public class TestKsqlRestApp extends ExternalResource {
     private final Map<String, Object> additionalProps = new HashMap<>();
 
     private Supplier<ServiceContext> serviceContext;
-    private BiFunction<KsqlConfig, KsqlSecurityExtension, Binder>  serviceContextBinder
+    private ServiceContextBinderFunction serviceContextBinder
         = KsqlRestServiceContextBinder::new;
 
     private Optional<BasicCredentials> credentials = Optional.empty();
@@ -437,7 +435,7 @@ public class TestKsqlRestApp extends ExternalResource {
 
     public Builder withStaticServiceContext(final Supplier<ServiceContext> serviceContext) {
       this.serviceContext = serviceContext;
-      this.serviceContextBinder = (config, extension) -> new AbstractBinder() {
+      this.serviceContextBinder = (context, config, extension) -> new AbstractBinder() {
         @Override
         protected void configure() {
           final Factory<ServiceContext> factory = new Factory<ServiceContext>() {

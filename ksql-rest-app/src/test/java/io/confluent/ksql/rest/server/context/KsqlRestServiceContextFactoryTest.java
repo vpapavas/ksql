@@ -19,6 +19,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,7 +67,7 @@ public class KsqlRestServiceContextFactoryTest {
 
   @Before
   public void setUp() {
-    KsqlRestServiceContextFactory.configure(ksqlConfig, securityExtension);
+    KsqlRestServiceContextFactory.configure(defaultServiceContext, ksqlConfig, securityExtension);
     serviceContextFactory = new KsqlRestServiceContextFactory(
         securityContext,
         request,
@@ -81,7 +82,7 @@ public class KsqlRestServiceContextFactoryTest {
   }
 
   @Test
-  public void shouldCreateDefaultServiceContextIfUserContextProviderIsNotEnabled() {
+  public void shouldNotCreateServiceContextIfUserContextProviderIsNotEnabled() {
     // Given:
     when(securityExtension.getUserContextProvider()).thenReturn(Optional.empty());
 
@@ -89,7 +90,6 @@ public class KsqlRestServiceContextFactoryTest {
     final ServiceContext serviceContext = serviceContextFactory.provide();
 
     // Then:
-    verify(defaultServiceContextProvider).create(ksqlConfig, Optional.empty());
     assertThat(serviceContext, is(defaultServiceContext));
   }
 
@@ -116,7 +116,7 @@ public class KsqlRestServiceContextFactoryTest {
     serviceContextFactory.provide();
 
     // Then:
-    verify(defaultServiceContextProvider).create(any(), eq(Optional.of("some-auth")));
+    verify(defaultServiceContextProvider,never()).create(any(), eq(Optional.of("some-auth")));
   }
 
   @Test
