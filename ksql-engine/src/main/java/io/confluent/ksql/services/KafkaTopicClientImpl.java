@@ -263,7 +263,8 @@ public class KafkaTopicClientImpl implements KafkaTopicClient {
       return;
     }
 
-    final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+    final DeleteTopicsResult deleteTopicsResult = adminClient
+        .deleteTopics(topicsToDelete);
     final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
     final List<String> failList = Lists.newArrayList();
     final List<Pair<String, Throwable>> exceptionList = Lists.newArrayList();

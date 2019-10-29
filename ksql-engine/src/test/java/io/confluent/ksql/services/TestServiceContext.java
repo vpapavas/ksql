@@ -96,10 +96,11 @@ public final class TestServiceContext {
   ) {
     return new DefaultServiceContext(
         kafkaClientSupplier,
-        adminClient, topicClient,
+        () -> adminClient,
+        (admin) -> topicClient,
         srClientFactory,
-        connectClient,
-        DisabledKsqlClient.instance()
+        () -> connectClient,
+        DisabledKsqlClient::instance
     );
   }
 }

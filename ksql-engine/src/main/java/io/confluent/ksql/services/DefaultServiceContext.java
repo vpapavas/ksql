@@ -19,6 +19,7 @@ import static java.util.Objects.requireNonNull;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.util.KsqlConfig;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -28,39 +29,56 @@ import org.apache.kafka.streams.KafkaClientSupplier;
  */
 public class DefaultServiceContext implements ServiceContext {
 
-  private final KafkaClientSupplier kafkaClientSupplier;
-  private final Admin adminClient;
-  private final KafkaTopicClient topicClient;
-  private final Supplier<SchemaRegistryClient> srClientFactory;
+  private final KafkaClientSupplier  kafkaClientSupplier;
+  private final Supplier<Admin> adminClientSupplier;
+  private final Supplier<KafkaTopicClient>  topicClientSupplier;
+  private final Supplier<SchemaRegistryClient> srClientSupplier;
   private final SchemaRegistryClient srClient;
-  private final ConnectClient connectClient;
-  private final SimpleKsqlClient ksqlClient;
+  private final Supplier<ConnectClient> connectClientSupplier;
+  private final Supplier<SimpleKsqlClient> ksqlClientSupplier;
 
   public DefaultServiceContext(
       final KafkaClientSupplier kafkaClientSupplier,
-      final Admin adminClient,
-      final KafkaTopicClient topicClient,
-      final Supplier<SchemaRegistryClient> srClientFactory,
-      final ConnectClient connectClient,
-      final SimpleKsqlClient ksqlClient
+      final Supplier<Admin> adminClientSupplier,
+      final Function<Admin, KafkaTopicClient> topicClientSupplier,
+      final Supplier<SchemaRegistryClient> srClientSupplier,
+      final Supplier<ConnectClient> connectClientSupplier,
+      final Supplier<SimpleKsqlClient> ksqlClientSupplier
   ) {
+
+    requireNonNull(adminClientSupplier, "adminClientSupplier");
+    this.adminClientSupplier = new NotThreadSafeMemoizedSupplier<Admin>(adminClientSupplier);
+
+    requireNonNull(srClientSupplier, "srClientSupplier");
+    this.srClientSupplier = new NotThreadSafeMemoizedSupplier<SchemaRegistryClient>(
+        srClientSupplier);
+
+    requireNonNull(connectClientSupplier, "connectClientSupplier");
+    this.connectClientSupplier = new NotThreadSafeMemoizedSupplier<ConnectClient>(
+        connectClientSupplier);
+
+    requireNonNull(ksqlClientSupplier, "ksqlClientSupplier");
+    this.ksqlClientSupplier = new NotThreadSafeMemoizedSupplier<SimpleKsqlClient>(
+        ksqlClientSupplier);
+
+    this.srClient = requireNonNull(srClientSupplier.get(), "srClient");
+
     this.kafkaClientSupplier = requireNonNull(kafkaClientSupplier, "kafkaClientSupplier");
-    this.adminClient = requireNonNull(adminClient, "adminClient");
-    this.topicClient = requireNonNull(topicClient, "topicClient");
-    this.srClientFactory = requireNonNull(srClientFactory, "srClientFactory");
-    this.srClient = requireNonNull(srClientFactory.get(), "srClient");
-    this.connectClient = requireNonNull(connectClient, "connectClient");
-    this.ksqlClient = requireNonNull(ksqlClient, "ksqlClient");
+
+    requireNonNull(topicClientSupplier, "topicClientSupplier");
+    this.topicClientSupplier = new NotThreadSafeMemoizedSupplier<KafkaTopicClient>(
+        () -> topicClientSupplier.apply(getAdminClient())
+    );
   }
 
   @Override
   public Admin getAdminClient() {
-    return adminClient;
+    return adminClientSupplier.get();
   }
 
   @Override
   public KafkaTopicClient getTopicClient() {
-    return topicClient;
+    return topicClientSupplier.get();
   }
 
   @Override
@@ -70,26 +88,56 @@ public class DefaultServiceContext implements ServiceContext {
 
   @Override
   public SchemaRegistryClient getSchemaRegistryClient() {
-    return srClient;
+    return srClientSupplier.get();
   }
 
   @Override
   public Supplier<SchemaRegistryClient> getSchemaRegistryClientFactory() {
-    return srClientFactory;
+    return srClientSupplier;
   }
 
   @Override
   public ConnectClient getConnectClient() {
-    return connectClient;
+    return connectClientSupplier.get();
   }
 
   @Override
   public SimpleKsqlClient getKsqlClient() {
-    return ksqlClient;
+    return ksqlClientSupplier.get();
   }
 
   @Override
   public void close() {
-    adminClient.close();
+    if (((NotThreadSafeMemoizedSupplier)adminClientSupplier).isInitialized()) {
+      adminClientSupplier.get().close();
+    }
+  }
+
+  public static class NotThreadSafeMemoizedSupplier<T> implements Supplier<T> {
+
+    private Supplier<T> supplier;
+    private T value;
+
+    public NotThreadSafeMemoizedSupplier(Supplier<T> supplierToMemoize) {
+      this.supplier = supplierToMemoize;
+      this.value = null;
+    }
+
+    @Override
+    public T get() {
+      if (value == null) {
+        value = supplier.get();
+      }
+      return value;
+    }
+
+    public boolean isInitialized() {
+      return value != null;
+    }
+
+    public Supplier<T> getSupplier() {
+      return supplier;
+    }
+
   }
 }
