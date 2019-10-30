@@ -85,6 +85,7 @@ public class QueryExecutorTest {
   private static final Set<SourceName> SOURCES
       = ImmutableSet.of(SourceName.of("foo"), SourceName.of("bar"));
   private static final SourceName SINK_NAME = SourceName.of("baz");
+  private static final QueryId PULL_QUERY_ID = new QueryId("PULL_"+SINK_NAME.name());
   private static final String STORE_NAME = "store";
   private static final String SUMMARY = "summary";
   private static final Map<String, Object> OVERRIDES = Collections.emptyMap();
@@ -310,20 +311,20 @@ public class QueryExecutorTest {
     // When:
     final PersistentQueryMetadata queryMetadata = queryBuilder.buildQuery(
         STATEMENT_TEXT,
-        QUERY_ID,
+        PULL_QUERY_ID,
         sink,
         SOURCES,
         physicalPlan,
         SUMMARY
     );
     final QueryContext.Stacker stacker = new Stacker();
-    queryMetadata.getMaterialization(QUERY_ID, stacker);
+    queryMetadata.getMaterialization(PULL_QUERY_ID, stacker);
 
     // Then:
     verify(ksqlMaterializationFactory).create(
         ksMaterialization,
         materializationInfo,
-        QUERY_ID,
+        PULL_QUERY_ID,
         stacker
     );
   }

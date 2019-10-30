@@ -35,7 +35,7 @@ public final class EngineProcessingLogMessageFactory {
   private EngineProcessingLogMessageFactory() {
   }
 
-  public static Function<ProcessingLogConfig, SchemaAndValue> recordProcessingError(
+  public static synchronized Function<ProcessingLogConfig, SchemaAndValue> recordProcessingError(
       final String errorMsg,
       final Throwable exception,
       final GenericRow record

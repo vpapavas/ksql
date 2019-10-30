@@ -45,6 +45,8 @@ public class PersistentQueryMetadata extends QueryMetadata {
   private final PhysicalSchema resultSchema;
   private final DataSourceType dataSourceType;
   private final Optional<MaterializationProvider> materializationProvider;
+  private Optional<Materialization> materialization;
+  private final QueryId queryId;
 
   // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
   public PersistentQueryMetadata(
@@ -86,6 +88,8 @@ public class PersistentQueryMetadata extends QueryMetadata {
     this.materializationProvider =
         requireNonNull(materializationProvider, "materializationProvider");
     this.dataSourceType = Objects.requireNonNull(dataSourceType, "dataSourceType");
+    this.materialization = Optional.empty();
+    this.queryId = new QueryId("PULL_" + sinkName.name());
   }
 
   private PersistentQueryMetadata(
@@ -100,6 +104,8 @@ public class PersistentQueryMetadata extends QueryMetadata {
     this.resultSchema = other.resultSchema;
     this.materializationProvider = other.materializationProvider;
     this.dataSourceType = other.dataSourceType;
+    this.materialization = other.materialization;
+    this.queryId = other.queryId;
   }
 
   public PersistentQueryMetadata copyWith(final Consumer<QueryMetadata> closeCallback) {
@@ -134,6 +140,11 @@ public class PersistentQueryMetadata extends QueryMetadata {
       final QueryId queryId,
       final QueryContext.Stacker contextStacker
   ) {
-    return materializationProvider.map(builder -> builder.build(queryId, contextStacker));
+    if (!materialization.isPresent()) {
+      materialization = materializationProvider.map(builder ->
+                                                        builder.build(this.queryId,
+                                                                      contextStacker));
+    }
+    return materialization;
   }
 }
