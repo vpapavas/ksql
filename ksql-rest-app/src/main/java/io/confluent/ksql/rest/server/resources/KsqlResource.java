@@ -208,6 +208,7 @@ public class KsqlResource implements KsqlConfigurable {
           distributedCmdResponseTimeout);
 
       final List<ParsedStatement> statements = ksqlEngine.parse(request.getKsql());
+
       validator.validate(
           SandboxedServiceContext.create(serviceContext),
           statements,

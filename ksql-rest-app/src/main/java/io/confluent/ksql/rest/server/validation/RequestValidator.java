@@ -24,6 +24,7 @@ import io.confluent.ksql.parser.KsqlParser.ParsedStatement;
 import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
 import io.confluent.ksql.parser.tree.CreateAsSelect;
 import io.confluent.ksql.parser.tree.InsertInto;
+import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.parser.tree.RunScript;
 import io.confluent.ksql.parser.tree.Statement;
 import io.confluent.ksql.rest.util.QueryCapacityUtil;
@@ -105,6 +106,13 @@ public class RequestValidator {
     int numPersistentQueries = 0;
     for (ParsedStatement parsed : statements) {
       final PreparedStatement<?> prepared = ctx.prepare(parsed);
+
+      final Class<? extends Statement> statementClass = prepared.getStatement().getClass();
+      if (statementClass.equals(Query.class)
+          && ((Query) prepared.getStatement()).isStatic()) {
+        continue;
+      }
+
       final ConfiguredStatement<?> configured = ConfiguredStatement.of(
           prepared, scopedPropertyOverrides, ksqlConfig);
 
