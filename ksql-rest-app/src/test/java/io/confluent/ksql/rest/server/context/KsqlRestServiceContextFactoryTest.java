@@ -92,7 +92,7 @@ public class KsqlRestServiceContextFactoryTest {
     verify(defaultServiceContextProvider).create(ksqlConfig, Optional.empty());
     assertThat(serviceContext, is(defaultServiceContext));
   }
-  
+
   @Test
   public void shouldCreateUserServiceContextIfUserContextProviderIsEnabled() {
     // Given:
