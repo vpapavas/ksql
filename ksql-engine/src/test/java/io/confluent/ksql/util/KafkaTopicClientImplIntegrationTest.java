@@ -36,7 +36,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import kafka.zookeeper.ZooKeeperClientException;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -67,7 +66,7 @@ public class KafkaTopicClientImplIntegrationTest {
 
   private String testTopic;
   private KafkaTopicClient client;
-  private Admin adminClient;
+  private AdminClient adminClient;
 
   @Before
   public void setUp() {

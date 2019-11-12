@@ -29,7 +29,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
  */
 public class DefaultServiceContext implements ServiceContext {
 
-  private final KafkaClientSupplier  kafkaClientSupplier;
+  private final KafkaClientSupplier kafkaClientSupplier;
   private final Supplier<Admin> adminClientSupplier;
   private final Supplier<KafkaTopicClient>  topicClientSupplier;
   private final Supplier<SchemaRegistryClient> srClientSupplier;
@@ -113,7 +113,7 @@ public class DefaultServiceContext implements ServiceContext {
     }
   }
 
-  public static class NotThreadSafeMemoizedSupplier<T> implements Supplier<T> {
+  public static final class NotThreadSafeMemoizedSupplier<T> implements Supplier<T> {
 
     private Supplier<T> supplier;
     private T value;

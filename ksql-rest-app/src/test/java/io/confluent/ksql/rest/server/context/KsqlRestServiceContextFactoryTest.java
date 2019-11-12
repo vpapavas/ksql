@@ -81,7 +81,7 @@ public class KsqlRestServiceContextFactoryTest {
   }
 
   @Test
-  public void shouldCreateServiceContextIfUserContextProviderIsNotEnabled() {
+  public void shouldCreateDefaultServiceContextIfUserContextProviderIsNotEnabled() {
     // Given:
     when(securityExtension.getUserContextProvider()).thenReturn(Optional.empty());
 
@@ -89,9 +89,10 @@ public class KsqlRestServiceContextFactoryTest {
     final ServiceContext serviceContext = serviceContextFactory.provide();
 
     // Then:
+    verify(defaultServiceContextProvider).create(ksqlConfig, Optional.empty());
     assertThat(serviceContext, is(defaultServiceContext));
   }
-
+  
   @Test
   public void shouldCreateUserServiceContextIfUserContextProviderIsEnabled() {
     // Given:
