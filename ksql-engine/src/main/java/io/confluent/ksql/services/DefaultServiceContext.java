@@ -17,6 +17,7 @@ package io.confluent.ksql.services;
 
 import static java.util.Objects.requireNonNull;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.util.KsqlConfig;
 import java.util.function.Function;
@@ -70,6 +71,41 @@ public class DefaultServiceContext implements ServiceContext {
         () -> topicClientSupplier.apply(getAdminClient())
     );
   }
+
+  @VisibleForTesting
+  public DefaultServiceContext(
+      final KafkaClientSupplier kafkaClientSupplier,
+      final Supplier<Admin> adminClientSupplier,
+      final KafkaTopicClient topicClient,
+      final Supplier<SchemaRegistryClient> srClientSupplier,
+      final Supplier<ConnectClient> connectClientSupplier,
+      final Supplier<SimpleKsqlClient> ksqlClientSupplier
+  ) {
+
+    requireNonNull(adminClientSupplier, "adminClientSupplier");
+    this.adminClientSupplier = new NotThreadSafeMemoizedSupplier<Admin>(adminClientSupplier);
+
+    requireNonNull(srClientSupplier, "srClientSupplier");
+    this.srClientSupplier = new NotThreadSafeMemoizedSupplier<SchemaRegistryClient>(
+        srClientSupplier);
+
+    requireNonNull(connectClientSupplier, "connectClientSupplier");
+    this.connectClientSupplier = new NotThreadSafeMemoizedSupplier<ConnectClient>(
+        connectClientSupplier);
+
+    requireNonNull(ksqlClientSupplier, "ksqlClientSupplier");
+    this.ksqlClientSupplier = new NotThreadSafeMemoizedSupplier<SimpleKsqlClient>(
+        ksqlClientSupplier);
+
+    this.srClient = requireNonNull(srClientSupplier.get(), "srClient");
+
+    this.kafkaClientSupplier = requireNonNull(kafkaClientSupplier, "kafkaClientSupplier");
+
+    requireNonNull(topicClient, "topicClient");
+    this.topicClientSupplier = new NotThreadSafeMemoizedSupplier<KafkaTopicClient>(
+        () -> topicClient);
+  }
+
 
   @Override
   public Admin getAdminClient() {

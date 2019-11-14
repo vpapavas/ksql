@@ -97,7 +97,7 @@ public final class TestServiceContext {
     return new DefaultServiceContext(
         kafkaClientSupplier,
         () -> adminClient,
-        (admin) -> topicClient,
+        topicClient,
         srClientFactory,
         () -> connectClient,
         DisabledKsqlClient::instance
