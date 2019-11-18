@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.execution.plan.SelectExpression;
+import io.confluent.ksql.query.QueryId;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import java.util.LinkedList;
 import java.util.List;
@@ -161,7 +162,7 @@ public final class MaterializationInfo {
       return info;
     }
 
-    public <R> R visit(TransformVisitor<R> visitor) {
+    public <R> R visit(TransformVisitor<R> visitor, QueryId queryId) {
       return visitor.visit(this);
     }
   }

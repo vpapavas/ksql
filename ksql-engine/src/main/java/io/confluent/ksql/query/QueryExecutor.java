@@ -26,7 +26,7 @@ import io.confluent.ksql.execution.plan.KTableHolder;
 import io.confluent.ksql.execution.plan.PlanBuilder;
 import io.confluent.ksql.execution.streams.KSPlanBuilder;
 import io.confluent.ksql.execution.streams.materialization.KsqlMaterializationFactory;
-import io.confluent.ksql.execution.streams.materialization.MaterializationProvider;
+import io.confluent.ksql.execution.streams.materialization.Materialization;
 import io.confluent.ksql.execution.streams.materialization.ks.KsMaterialization;
 import io.confluent.ksql.execution.streams.materialization.ks.KsMaterializationFactory;
 import io.confluent.ksql.function.FunctionRegistry;
@@ -215,8 +215,8 @@ public final class QueryExecutor {
         sinkDataSource.getSchema(),
         sinkDataSource.getSerdeOptions()
     );
-    final Optional<MaterializationProvider> materializationBuilder = getMaterializationInfo(result)
-        .flatMap(info -> buildMaterializationProvider(
+    final Optional<Materialization> materializationBuilder = getMaterializationInfo(result)
+        .flatMap(info -> buildMaterialization(
             info,
             streams,
             querySchema,
@@ -340,7 +340,7 @@ public final class QueryExecutor {
     return String.format("%s_%d", original, System.currentTimeMillis());
   }
 
-  private Optional<MaterializationProvider> buildMaterializationProvider(
+  private Optional<Materialization> buildMaterialization(
       final MaterializationInfo info,
       final KafkaStreams kafkaStreams,
       final PhysicalSchema schema,
@@ -367,12 +367,6 @@ public final class QueryExecutor {
             ksqlConfig
         );
 
-    return ksMaterialization.map(ksMat -> (queryId, contextStacker) -> ksqlMaterializationFactory
-        .create(
-            ksMat,
-            info,
-            queryId,
-            contextStacker
-        ));
+    return ksMaterialization.map(ksMat -> ksqlMaterializationFactory.create(ksMat, info));
   }
 }

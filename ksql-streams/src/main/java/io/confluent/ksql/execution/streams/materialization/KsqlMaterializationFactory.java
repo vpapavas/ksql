@@ -20,6 +20,7 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.execution.context.QueryContext;
+import io.confluent.ksql.execution.context.QueryContext.Stacker;
 import io.confluent.ksql.execution.context.QueryLoggerUtil;
 import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.execution.materialization.AggregatesInfo;
@@ -96,11 +97,9 @@ public final class KsqlMaterializationFactory {
 
   public Materialization create(
       final Materialization delegate,
-      final MaterializationInfo info,
-      final QueryId queryId,
-      final QueryContext.Stacker contextStacker
+      final MaterializationInfo info
   ) {
-    final TransformVisitor transformVisitor = new TransformVisitor(queryId, contextStacker);
+    final TransformVisitor transformVisitor = new TransformVisitor();
     final List<BiFunction<Struct, GenericRow, Optional<GenericRow>>> transforms = info
         .getTransforms()
         .stream()
@@ -150,7 +149,7 @@ public final class KsqlMaterializationFactory {
         LogicalSchema schema,
         KsqlConfig ksqlConfig,
         FunctionRegistry functionRegistry,
-        ProcessingLogger processingLogger
+        QueryContext.Stacker stacker
     );
   }
 
@@ -176,17 +175,17 @@ public final class KsqlMaterializationFactory {
 
   private class TransformVisitor implements MaterializationInfo.TransformVisitor<
       BiFunction<Struct, GenericRow, Optional<GenericRow>>> {
-    private final QueryId queryId;
+
     private final QueryContext.Stacker stacker;
 
-    TransformVisitor(final QueryId queryId, final QueryContext.Stacker stacker) {
-      this.queryId = Objects.requireNonNull(queryId, "queryId");
-      this.stacker = Objects.requireNonNull(stacker, "stacker");
+    TransformVisitor() {
+      this.stacker = new Stacker();
     }
 
     @Override
     public BiFunction<Struct, GenericRow, Optional<GenericRow>> visit(
-        final MaterializationInfo.AggregateMapInfo info) {
+        final MaterializationInfo.AggregateMapInfo info,
+        final QueryId queryId) {
       final Function<GenericRow, GenericRow> mapper = aggregateMapperFactory.create(
           info.getInfo(),
           functionRegistry
@@ -197,22 +196,25 @@ public final class KsqlMaterializationFactory {
     @Override
     public BiFunction<Struct, GenericRow, Optional<GenericRow>> visit(
         final MaterializationInfo.SqlPredicateInfo info) {
-      final ProcessingLogger logger = processingLogContext.getLoggerFactory().getLogger(
+
+      stacker.push(FILTER_OP_NAME).getQueryContext();
+      /*final ProcessingLogger logger = processingLogContext.getLoggerFactory().getLogger(
           QueryLoggerUtil.queryLoggerName(queryId, stacker.push(FILTER_OP_NAME).getQueryContext())
-      );
+      );*/
       final SqlPredicate predicate = sqlPredicateFactory.create(
           info.getFilterExpression(),
           info.getSchema(),
           ksqlConfig,
           functionRegistry,
-          logger
+          stacker
       );
-      return (s, g) -> predicate.getPredicate().test(s, g) ? Optional.of(g) : Optional.empty();
+      return (s, g, queryId, logContext) -> predicate.getPredicate(queryId, logContext).test(s, g) ? Optional.of(g) : Optional.empty();
     }
 
     @Override
     public BiFunction<Struct, GenericRow, Optional<GenericRow>> visit(
-        final ProjectInfo info
+        final ProjectInfo info,
+        final QueryId queryId
     ) {
       final ProcessingLogger logger = processingLogContext.getLoggerFactory().getLogger(
           QueryLoggerUtil.queryLoggerName(queryId, stacker.push(PROJECT_OP_NAME).getQueryContext())

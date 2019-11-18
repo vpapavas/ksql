@@ -23,10 +23,14 @@ import io.confluent.ksql.execution.codegen.CodeGenRunner;
 import io.confluent.ksql.execution.codegen.CodeGenSpec;
 import io.confluent.ksql.execution.codegen.CodeGenSpec.ArgumentSpec;
 import io.confluent.ksql.execution.codegen.SqlToJavaVisitor;
+import io.confluent.ksql.execution.context.QueryContext;
+import io.confluent.ksql.execution.context.QueryLoggerUtil;
 import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.execution.util.EngineProcessingLogMessageFactory;
 import io.confluent.ksql.function.FunctionRegistry;
+import io.confluent.ksql.logging.processing.ProcessingLogContext;
 import io.confluent.ksql.logging.processing.ProcessingLogger;
+import io.confluent.ksql.query.QueryId;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.KsqlException;
@@ -38,7 +42,7 @@ public final class SqlPredicate {
 
   private final Expression filterExpression;
   private final IExpressionEvaluator ee;
-  private final ProcessingLogger processingLogger;
+  private final QueryContext.Stacker stacker;
   private final CodeGenSpec spec;
 
   public SqlPredicate(
@@ -46,10 +50,10 @@ public final class SqlPredicate {
       LogicalSchema schema,
       KsqlConfig ksqlConfig,
       FunctionRegistry functionRegistry,
-      ProcessingLogger processingLogger
+      QueryContext.Stacker stacker
   ) {
     this.filterExpression = requireNonNull(filterExpression, "filterExpression");
-    this.processingLogger = requireNonNull(processingLogger);
+    this.stacker = requireNonNull(stacker);
 
     CodeGenRunner codeGenRunner = new CodeGenRunner(schema, ksqlConfig, functionRegistry);
     spec = codeGenRunner.getCodeGenSpec(this.filterExpression);
@@ -78,7 +82,8 @@ public final class SqlPredicate {
     }
   }
 
-  public <K> Predicate<K, GenericRow> getPredicate() {
+  public <K> Predicate<K, GenericRow> getPredicate(
+      QueryId queryId,ProcessingLogContext processingLogContext) {
     return (key, row) -> {
       if (row == null) {
         return false;
@@ -89,14 +94,19 @@ public final class SqlPredicate {
         spec.resolve(row, values);
         return (Boolean) ee.evaluate(values);
       } catch (Exception e) {
-        logProcessingError(e, row);
+
+        logProcessingError(queryId, processingLogContext, e, row);
       }
       return false;
     };
   }
 
-  private void logProcessingError(Exception e, GenericRow row) {
-    processingLogger.error(
+  private void logProcessingError(QueryId queryId, ProcessingLogContext processingLogContext,
+                                  Exception e, GenericRow row) {
+    final ProcessingLogger logger = processingLogContext.getLoggerFactory().getLogger(
+        QueryLoggerUtil.queryLoggerName(queryId, stacker.getQueryContext())
+    );
+    logger.error(
         EngineProcessingLogMessageFactory.recordProcessingError(
             String.format(
                 "Error evaluating predicate %s: %s",

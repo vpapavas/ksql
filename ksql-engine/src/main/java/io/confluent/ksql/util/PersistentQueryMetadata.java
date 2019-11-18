@@ -17,11 +17,8 @@ package io.confluent.ksql.util;
 
 import static java.util.Objects.requireNonNull;
 
-import com.google.common.base.Suppliers;
-import io.confluent.ksql.execution.context.QueryContext.Stacker;
 import io.confluent.ksql.execution.ddl.commands.KsqlTopic;
 import io.confluent.ksql.execution.streams.materialization.Materialization;
-import io.confluent.ksql.execution.streams.materialization.MaterializationProvider;
 import io.confluent.ksql.metastore.model.DataSource.DataSourceType;
 import io.confluent.ksql.name.SourceName;
 import io.confluent.ksql.query.QueryId;
@@ -31,7 +28,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.Topology;
 
@@ -47,7 +43,7 @@ public class PersistentQueryMetadata extends QueryMetadata {
   private final QuerySchemas schemas;
   private final PhysicalSchema resultSchema;
   private final DataSourceType dataSourceType;
-  private final Supplier<Optional<Materialization>> materializationSupplier;
+  private final Optional<Materialization> materialization;
 
   // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
   public PersistentQueryMetadata(
@@ -59,7 +55,7 @@ public class PersistentQueryMetadata extends QueryMetadata {
       final String executionPlan,
       final QueryId id,
       final DataSourceType dataSourceType,
-      final Optional<MaterializationProvider> materializationProvider,
+      final Optional<Materialization> materialization,
       final String queryApplicationId,
       final KsqlTopic resultTopic,
       final Topology topology,
@@ -86,11 +82,11 @@ public class PersistentQueryMetadata extends QueryMetadata {
     this.sinkName = Objects.requireNonNull(sinkName, "sinkName");
     this.schemas = requireNonNull(schemas, "schemas");
     this.resultSchema = requireNonNull(schema, "schema");
-    requireNonNull(materializationProvider, "materializationProvider");
+    this.materialization = requireNonNull(materialization, "materialization");
     this.dataSourceType = Objects.requireNonNull(dataSourceType, "dataSourceType");
-    this.materializationSupplier = Suppliers.memoize(() -> materializationProvider
+    /*this.materializationSupplier = Suppliers.memoize(() -> materializationProvider
         .map(builder -> builder.build(getPullQueryId(sinkName.name()),
-                                      new Stacker())));
+                                      new Stacker())));*/
   }
 
   private PersistentQueryMetadata(
@@ -104,7 +100,7 @@ public class PersistentQueryMetadata extends QueryMetadata {
     this.schemas = other.schemas;
     this.resultSchema = other.resultSchema;
     this.dataSourceType = other.dataSourceType;
-    this.materializationSupplier = other.materializationSupplier;
+    this.materialization = other.materialization;
   }
 
   public PersistentQueryMetadata copyWith(final Consumer<QueryMetadata> closeCallback) {
@@ -136,7 +132,7 @@ public class PersistentQueryMetadata extends QueryMetadata {
   }
 
   public Optional<Materialization> getMaterialization() {
-    return materializationSupplier.get();
+    return materialization;
   }
 
   public static QueryId getPullQueryId(String sinkName) {
