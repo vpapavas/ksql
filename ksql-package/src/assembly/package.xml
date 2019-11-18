@@ -80,12 +80,12 @@
                  dependencies happen to be missing in the assembly you may want to
                  disable transitive filtering. -->
             <useTransitiveFiltering>true</useTransitiveFiltering>
-            <excludes>
+            <!-- <excludes>
                 <exclude>io.confluent:rest-utils</exclude>
                 <exclude>io.confluent:common-config</exclude>
                 <exclude>io.confluent:common-utils</exclude>
                 <exclude>io.confluent:common-metrics</exclude>
-            </excludes>
+            </excludes> -->
         </dependencySet>
     </dependencySets>
 </assembly>
