@@ -43,6 +43,7 @@ public final class SqlPredicate {
   private final Expression filterExpression;
   private final IExpressionEvaluator ee;
   private final QueryContext.Stacker stacker;
+  private final ProcessingLogContext logContext;
   private final CodeGenSpec spec;
 
   public SqlPredicate(
@@ -50,10 +51,12 @@ public final class SqlPredicate {
       LogicalSchema schema,
       KsqlConfig ksqlConfig,
       FunctionRegistry functionRegistry,
-      QueryContext.Stacker stacker
+      QueryContext.Stacker stacker,
+      ProcessingLogContext logContext
   ) {
     this.filterExpression = requireNonNull(filterExpression, "filterExpression");
     this.stacker = requireNonNull(stacker);
+    this.logContext = requireNonNull(logContext);
 
     CodeGenRunner codeGenRunner = new CodeGenRunner(schema, ksqlConfig, functionRegistry);
     spec = codeGenRunner.getCodeGenSpec(this.filterExpression);
@@ -82,8 +85,8 @@ public final class SqlPredicate {
     }
   }
 
-  public <K> Predicate<K, GenericRow> getPredicate(
-      QueryId queryId,ProcessingLogContext processingLogContext) {
+  public <K> Predicate<K, GenericRow> getPredicate(QueryId queryId) {
+
     return (key, row) -> {
       if (row == null) {
         return false;
@@ -95,17 +98,16 @@ public final class SqlPredicate {
         return (Boolean) ee.evaluate(values);
       } catch (Exception e) {
 
-        logProcessingError(queryId, processingLogContext, e, row);
+        logProcessingError(queryId, e, row);
       }
       return false;
     };
   }
 
-  private void logProcessingError(QueryId queryId, ProcessingLogContext processingLogContext,
-                                  Exception e, GenericRow row) {
-    final ProcessingLogger logger = processingLogContext.getLoggerFactory().getLogger(
-        QueryLoggerUtil.queryLoggerName(queryId, stacker.getQueryContext())
-    );
+  private void logProcessingError(QueryId queryId, Exception e, GenericRow row) {
+    ProcessingLogger logger = logContext.getLoggerFactory().getLogger(
+        QueryLoggerUtil.queryLoggerName(queryId, stacker.getQueryContext()));
+
     logger.error(
         EngineProcessingLogMessageFactory.recordProcessingError(
             String.format(

@@ -16,6 +16,7 @@
 package io.confluent.ksql.execution.streams.materialization;
 
 import com.google.common.collect.Range;
+import io.confluent.ksql.query.QueryId;
 import java.time.Instant;
 import java.util.List;
 import org.apache.kafka.connect.data.Struct;
@@ -33,5 +34,5 @@ public interface MaterializedWindowedTable {
    * @param windowStart the bounds on the window's start time.
    * @return the rows for the key that exist within the range.
    */
-  List<WindowedRow> get(Struct key, Range<Instant> windowStart);
+  List<WindowedRow> get(Struct key, Range<Instant> windowStart, QueryId queryId);
 }

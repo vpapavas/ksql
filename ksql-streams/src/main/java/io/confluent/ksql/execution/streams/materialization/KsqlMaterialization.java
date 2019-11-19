@@ -22,12 +22,12 @@ import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Range;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.model.WindowType;
+import io.confluent.ksql.query.QueryId;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import org.apache.kafka.connect.data.Struct;
 
 /**
@@ -56,7 +56,7 @@ class KsqlMaterialization implements Materialization {
   private final Materialization inner;
   private final LogicalSchema schema;
 
-  private final List<BiFunction<Struct, GenericRow, Optional<GenericRow>>> transforms;
+  private final List<TransformFunction> transforms;
 
   /**
    * @param inner the inner materialization, e.g. a KS specific one
@@ -65,7 +65,7 @@ class KsqlMaterialization implements Materialization {
   KsqlMaterialization(
       final Materialization inner,
       final LogicalSchema schema,
-      final List<BiFunction<Struct, GenericRow, Optional<GenericRow>>> transforms
+      final List<TransformFunction> transforms
   ) {
     this.inner = requireNonNull(inner, "table");
     this.schema = requireNonNull(schema, "schema");
@@ -100,11 +100,13 @@ class KsqlMaterialization implements Materialization {
 
   private Optional<GenericRow> filterAndTransform(
       final Struct key,
-      final GenericRow value
+      final GenericRow value,
+      final QueryId queryId
   ) {
+
     GenericRow intermediate = value;
-    for (final BiFunction<Struct, GenericRow, Optional<GenericRow>> transform : transforms) {
-      final Optional<GenericRow> result = transform.apply(key, intermediate);
+    for (final TransformFunction transform : transforms) {
+      final Optional<GenericRow> result = transform.transform(key, intermediate, queryId);
       if (!result.isPresent()) {
         return Optional.empty();
       }
@@ -122,9 +124,9 @@ class KsqlMaterialization implements Materialization {
     }
 
     @Override
-    public Optional<Row> get(final Struct key) {
-      return table.get(key)
-          .flatMap(row -> filterAndTransform(key, row.value())
+    public Optional<Row> get(final Struct key, QueryId queryId) {
+      return table.get(key, queryId)
+          .flatMap(row -> filterAndTransform(key, row.value(), queryId)
               .map(v -> row.withValue(v, schema()))
           );
     }
@@ -139,13 +141,14 @@ class KsqlMaterialization implements Materialization {
     }
 
     @Override
-    public List<WindowedRow> get(final Struct key, final Range<Instant> windowStart) {
-      final List<WindowedRow> result = table.get(key, windowStart);
+    public List<WindowedRow> get(final Struct key, final Range<Instant> windowStart,
+                                 QueryId queryId) {
+      final List<WindowedRow> result = table.get(key, windowStart, queryId);
 
       final Builder<WindowedRow> builder = ImmutableList.builder();
 
       for (final WindowedRow row : result) {
-        filterAndTransform(key, row.value())
+        filterAndTransform(key, row.value(), queryId)
             .ifPresent(v -> builder.add(row.withValue(v, schema())));
       }
 

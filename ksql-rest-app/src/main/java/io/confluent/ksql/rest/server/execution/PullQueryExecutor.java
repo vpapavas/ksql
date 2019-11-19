@@ -28,6 +28,7 @@ import io.confluent.ksql.KsqlExecutionContext;
 import io.confluent.ksql.analyzer.Analysis;
 import io.confluent.ksql.analyzer.PullQueryValidator;
 import io.confluent.ksql.analyzer.QueryAnalyzer;
+import io.confluent.ksql.execution.context.QueryContext.Stacker;
 import io.confluent.ksql.execution.expression.tree.ColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.ComparisonExpression;
 import io.confluent.ksql.execution.expression.tree.ComparisonExpression.Type;
@@ -174,12 +175,12 @@ public final class PullQueryExecutor {
         final Range<Instant> windowStart = whereInfo.windowStartBounds.get();
 
         final List<? extends TableRow> rows = mat.windowed()
-            .get(rowKey, windowStart);
+            .get(rowKey, windowStart, queryId);
 
         result = new Result(mat.schema(), rows);
       } else {
         final List<? extends TableRow> rows = mat.nonWindowed()
-            .get(rowKey)
+            .get(rowKey, queryId)
             .map(ImmutableList::of)
             .orElse(ImmutableList.of());
 
@@ -557,7 +558,8 @@ public final class PullQueryExecutor {
         intermediateSchema.withAlias(sourceName),
         ksqlConfig,
         executionContext.getMetaStore(),
-        NoopProcessingLogContext.INSTANCE.getLoggerFactory().getLogger("any")
+        new Stacker(),
+        NoopProcessingLogContext.INSTANCE
     );
 
     final ImmutableList.Builder<List<?>> output = ImmutableList.builder();

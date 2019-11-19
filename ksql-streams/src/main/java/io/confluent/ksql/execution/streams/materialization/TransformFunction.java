@@ -1,8 +1,8 @@
 /*
  * Copyright 2019 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
+ * Licensed under the Confluent Community License (the "License"; you may not use
+ * this file except in compliance with the License. You may obtain a copy of the
  * License at
  *
  * http://www.confluent.io/confluent-community-license
@@ -15,20 +15,12 @@
 
 package io.confluent.ksql.execution.streams.materialization;
 
+import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.query.QueryId;
 import java.util.Optional;
 import org.apache.kafka.connect.data.Struct;
 
-/**
- * Materialization of a table with a non-windowed key
- */
-public interface MaterializedTable {
+public interface TransformFunction {
 
-  /**
-   * Get the value, if one exists, of the supplied {@code key}.
-   *
-   * @param key the key to look up.
-   * @return the value, if one is exists.
-   */
-  Optional<Row> get(Struct key, QueryId queryId);
+  public Optional<GenericRow> transform(Struct struct, GenericRow row, QueryId queryId);
 }
