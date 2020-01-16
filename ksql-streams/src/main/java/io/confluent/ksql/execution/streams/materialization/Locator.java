@@ -16,8 +16,11 @@
 package io.confluent.ksql.execution.streams.materialization;
 
 import java.net.URI;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.streams.state.HostInfo;
 
 /**
  * Type used to locate on which KSQL node materialized data is stored.
@@ -28,15 +31,15 @@ import org.apache.kafka.connect.data.Struct;
 public interface Locator {
 
   /**
-   * Locate which KSQL node stores the supplied {@code key}.
+   * Locate which KSQL nodes store the supplied {@code key}.
    *
    * <p>Implementations are free to return {@link Optional#empty()} if the location is not known at
    * this time.
    *
    * @param key the required key.
-   * @return the owning node, if known.
+   * @return the list of nodes, that can potentially serve the key.
    */
-  Optional<KsqlNode> locate(Struct key);
+  List<KsqlNode> locate(Struct key, Optional<Map<String, HostInfo>> hostStatuses);
 
 
   interface KsqlNode {

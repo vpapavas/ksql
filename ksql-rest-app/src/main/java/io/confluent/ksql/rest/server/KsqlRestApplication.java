@@ -472,7 +472,11 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
                       errorHandler,
                       securityExtension,
                       serverState,
-                      serviceContext.getSchemaRegistryClientFactory()
+                      serviceContext.getSchemaRegistryClientFactory(),
+                      restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
+                      // TODO fix after merge
+                      restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
+                      Optional.empty()
                   );
                 }
               })
@@ -582,7 +586,11 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         Duration.ofMillis(restConfig.getLong(DISTRIBUTED_COMMAND_RESPONSE_TIMEOUT_MS_CONFIG)),
         versionChecker::updateLastRequestTime,
         authorizationValidator,
-        errorHandler
+        errorHandler,
+        restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
+        // TODO fix after merge
+        restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
+        Optional.empty()
     );
 
     final KsqlResource ksqlResource = new KsqlResource(

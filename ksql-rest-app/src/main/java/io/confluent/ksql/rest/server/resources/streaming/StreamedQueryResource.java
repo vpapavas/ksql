@@ -61,6 +61,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +82,9 @@ public class StreamedQueryResource implements KsqlConfigurable {
   private final Optional<KsqlAuthorizationValidator> authorizationValidator;
   private final Errors errorHandler;
   private KsqlConfig ksqlConfig;
+  private final boolean queryStandbysEnabled;
+  private final boolean heartbeatEnabled;
+  private final Optional<Map<String, HostInfo>> hostStatuses;
 
   public StreamedQueryResource(
       final KsqlEngine ksqlEngine,
@@ -89,7 +93,10 @@ public class StreamedQueryResource implements KsqlConfigurable {
       final Duration commandQueueCatchupTimeout,
       final ActivenessRegistrar activenessRegistrar,
       final Optional<KsqlAuthorizationValidator> authorizationValidator,
-      final Errors errorHandler
+      final Errors errorHandler,
+      final boolean queryStandbysEnabled,
+      final boolean heartbeatEnabled,
+      final Optional<Map<String, HostInfo>> hostStatuses
   ) {
     this(
         ksqlEngine,
@@ -99,12 +106,17 @@ public class StreamedQueryResource implements KsqlConfigurable {
         commandQueueCatchupTimeout,
         activenessRegistrar,
         authorizationValidator,
-        errorHandler
+        errorHandler,
+        queryStandbysEnabled,
+        heartbeatEnabled,
+        hostStatuses
     );
   }
 
   @VisibleForTesting
+  // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
   StreamedQueryResource(
+      // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
       final KsqlEngine ksqlEngine,
       final StatementParser statementParser,
       final CommandQueue commandQueue,
@@ -112,7 +124,10 @@ public class StreamedQueryResource implements KsqlConfigurable {
       final Duration commandQueueCatchupTimeout,
       final ActivenessRegistrar activenessRegistrar,
       final Optional<KsqlAuthorizationValidator> authorizationValidator,
-      final Errors errorHandler
+      final Errors errorHandler,
+      final boolean queryStandbysEnabled,
+      final boolean heartbeatEnabled,
+      final Optional<Map<String, HostInfo>> hostStatuses
   ) {
     this.ksqlEngine = Objects.requireNonNull(ksqlEngine, "ksqlEngine");
     this.statementParser = Objects.requireNonNull(statementParser, "statementParser");
@@ -125,7 +140,10 @@ public class StreamedQueryResource implements KsqlConfigurable {
     this.activenessRegistrar =
         Objects.requireNonNull(activenessRegistrar, "activenessRegistrar");
     this.authorizationValidator = authorizationValidator;
-    this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");;
+    this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");
+    this.queryStandbysEnabled = queryStandbysEnabled;
+    this.heartbeatEnabled = heartbeatEnabled;
+    this.hostStatuses = hostStatuses;
   }
 
   @Override
@@ -230,10 +248,12 @@ public class StreamedQueryResource implements KsqlConfigurable {
       final Map<String, Object> streamsProperties
   ) {
     final ConfiguredStatement<Query> configured =
-        ConfiguredStatement.of(statement, streamsProperties, ksqlConfig);
+        ConfiguredStatement.of(statement,streamsProperties, ksqlConfig);
 
+    // TODO fix after heartbeat merge
     final TableRowsEntity entity = PullQueryExecutor
-        .execute(configured, ksqlEngine, serviceContext);
+        .execute(configured, ksqlEngine, serviceContext, queryStandbysEnabled, heartbeatEnabled,
+                 hostStatuses);
 
     final StreamedRow header = StreamedRow.header(entity.getQueryId(), entity.getSchema());
 

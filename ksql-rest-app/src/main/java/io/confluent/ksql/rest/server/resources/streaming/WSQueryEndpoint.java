@@ -65,6 +65,7 @@ import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 import javax.ws.rs.core.Response;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,7 +91,7 @@ public class WSQueryEndpoint {
   private final ListeningScheduledExecutorService exec;
   private final ActivenessRegistrar activenessRegistrar;
   private final QueryPublisher pushQueryPublisher;
-  private final QueryPublisher pullQueryPublisher;
+  private final IPullQueryPublisher pullQueryPublisher;
   private final PrintTopicPublisher topicPublisher;
   private final Duration commandQueueCatchupTimeout;
   private final Optional<KsqlAuthorizationValidator> authorizationValidator;
@@ -100,6 +101,9 @@ public class WSQueryEndpoint {
   private final ServerState serverState;
   private final Errors errorHandler;
   private final Supplier<SchemaRegistryClient> schemaRegistryClientFactory;
+  private final boolean queryStandbysEnabled;
+  private final boolean heartbeatEnabled;
+  private final Optional<Map<String, HostInfo>> hostStatuses;
 
   private WebSocketSubscriber<?> subscriber;
   private KsqlSecurityContext securityContext;
@@ -119,7 +123,10 @@ public class WSQueryEndpoint {
       final Errors errorHandler,
       final KsqlSecurityExtension securityExtension,
       final ServerState serverState,
-      final Supplier<SchemaRegistryClient> schemaRegistryClientFactory
+      final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
+      final boolean queryStandbysEnabled,
+      final boolean heartbeatEnabled,
+      final Optional<Map<String, HostInfo>> hostStatuses
   ) {
     this(ksqlConfig,
         mapper,
@@ -138,7 +145,10 @@ public class WSQueryEndpoint {
         RestServiceContextFactory::create,
         RestServiceContextFactory::create,
         serverState,
-        schemaRegistryClientFactory);
+        schemaRegistryClientFactory,
+        queryStandbysEnabled,
+        heartbeatEnabled,
+        hostStatuses);
   }
 
   // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
@@ -151,7 +161,7 @@ public class WSQueryEndpoint {
       final CommandQueue commandQueue,
       final ListeningScheduledExecutorService exec,
       final QueryPublisher pushQueryPublisher,
-      final QueryPublisher pullQueryPublisher,
+      final IPullQueryPublisher pullQueryPublisher,
       final PrintTopicPublisher topicPublisher,
       final ActivenessRegistrar activenessRegistrar,
       final Duration commandQueueCatchupTimeout,
@@ -161,7 +171,10 @@ public class WSQueryEndpoint {
       final UserServiceContextFactory serviceContextFactory,
       final DefaultServiceContextFactory defaultServiceContextFactory,
       final ServerState serverState,
-      final Supplier<SchemaRegistryClient> schemaRegistryClientFactory
+      final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
+      final boolean queryStandbysEnabled,
+      final boolean heartbeatEnabled,
+      final Optional<Map<String, HostInfo>> hostStatuses
   ) {
     this.ksqlConfig = Objects.requireNonNull(ksqlConfig, "ksqlConfig");
     this.mapper = Objects.requireNonNull(mapper, "mapper");
@@ -188,6 +201,9 @@ public class WSQueryEndpoint {
     this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");
     this.schemaRegistryClientFactory =
         Objects.requireNonNull(schemaRegistryClientFactory, "schemaRegistryClientFactory");
+    this.queryStandbysEnabled = queryStandbysEnabled;
+    this.heartbeatEnabled = heartbeatEnabled;
+    this.hostStatuses = hostStatuses;
   }
 
   @SuppressWarnings("unused")
@@ -392,17 +408,26 @@ public class WSQueryEndpoint {
     final ConfiguredStatement<Query> configured =
         ConfiguredStatement.of(statement, clientLocalProperties, ksqlConfig);
 
-    final QueryPublisher queryPublisher = query.isPullQuery()
-        ? pullQueryPublisher
-        : pushQueryPublisher;
-
-    queryPublisher.start(
-        ksqlEngine,
-        info.securityContext.getServiceContext(),
-        exec,
-        configured,
-        streamSubscriber
-    );
+    if (query.isPullQuery()) {
+      pullQueryPublisher.start(
+          ksqlEngine,
+          info.securityContext.getServiceContext(),
+          exec,
+          configured,
+          streamSubscriber,
+          queryStandbysEnabled,
+          heartbeatEnabled,
+          hostStatuses
+      );
+    } else {
+      pushQueryPublisher.start(
+          ksqlEngine,
+          info.securityContext.getServiceContext(),
+          exec,
+          configured,
+          streamSubscriber
+      );
+    }
   }
 
   private void handlePrintTopic(final RequestContext info, final PrintTopic printTopic) {
@@ -453,9 +478,14 @@ public class WSQueryEndpoint {
       final ServiceContext serviceContext,
       final ListeningScheduledExecutorService ignored,
       final ConfiguredStatement<Query> query,
-      final WebSocketSubscriber<StreamedRow> streamSubscriber
+      final WebSocketSubscriber<StreamedRow> streamSubscriber,
+      final boolean queryStandbysEnabled,
+      final boolean heartbeatEnabled,
+      final Optional<Map<String, HostInfo>> hostStatuses
+
   ) {
-    new PullQueryPublisher(ksqlEngine, serviceContext, query)
+    new PullQueryPublisher(ksqlEngine, serviceContext, query, queryStandbysEnabled,
+                           heartbeatEnabled, hostStatuses)
         .subscribe(streamSubscriber);
   }
 
@@ -480,6 +510,21 @@ public class WSQueryEndpoint {
         WebSocketSubscriber<StreamedRow> subscriber);
 
   }
+
+  interface IPullQueryPublisher {
+
+    void start(
+        KsqlEngine ksqlEngine,
+        ServiceContext serviceContext,
+        ListeningScheduledExecutorService exec,
+        ConfiguredStatement<Query> query,
+        WebSocketSubscriber<StreamedRow> subscriber,
+        boolean queryStandbysEnabled,
+        boolean heartbeatEnabled,
+        Optional<Map<String, HostInfo>> hostStatuses);
+
+  }
+
 
   interface PrintTopicPublisher {
 

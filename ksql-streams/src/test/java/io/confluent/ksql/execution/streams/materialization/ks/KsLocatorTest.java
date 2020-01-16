@@ -22,19 +22,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.NullPointerTester;
 import com.google.common.testing.NullPointerTester.Visibility;
 import io.confluent.ksql.execution.streams.materialization.Locator.KsqlNode;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.StreamsMetadata;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -51,9 +55,15 @@ public class KsLocatorTest {
   @Mock
   private KafkaStreams kafkaStreams;
   @Mock
+  private KeyQueryMetadata keyQueryMetadata;
+  @Mock
   private Serializer<Struct> keySerializer;
   @Mock
-  private HostInfo hostInfo;
+  private HostInfo activeHostInfo;
+  @Mock
+  private HostInfo standByHostInfo1;
+  @Mock
+  private HostInfo standByHostInfo2;
 
   private KsLocator locator;
 
@@ -61,10 +71,14 @@ public class KsLocatorTest {
   public void setUp() {
     locator = new KsLocator(STORE_NAME, kafkaStreams, keySerializer, LOCAL_HOST_URL);
 
-    givenOwnerMetadata(Optional.empty());
+    when(activeHostInfo.host()).thenReturn("remoteHost");
+    when(activeHostInfo.port()).thenReturn(2345);
 
-    when(hostInfo.host()).thenReturn("remoteHost");
-    when(hostInfo.port()).thenReturn(2345);
+    when(standByHostInfo1.host()).thenReturn("standBy1");
+    when(standByHostInfo1.port()).thenReturn(1234);
+
+    when(standByHostInfo2.host()).thenReturn("standBy2");
+    when(standByHostInfo2.port()).thenReturn(5678);
   }
 
   @Test
@@ -79,123 +93,154 @@ public class KsLocatorTest {
   @Test
   @SuppressWarnings("deprecation")
   public void shouldRequestMetadata() {
+    // Given:
+    getEmtpyMetadata();
+
     // When:
-    locator.locate(SOME_KEY);
+    locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    verify(kafkaStreams).metadataForKey(STORE_NAME, SOME_KEY, keySerializer);
+    verify(kafkaStreams).queryMetadataForKey(STORE_NAME, SOME_KEY, keySerializer);
   }
 
   @Test
   public void shouldReturnEmptyIfOwnerNotKnown() {
     // Given:
-    givenOwnerMetadata(Optional.empty());
+    getEmtpyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result, is(Optional.empty()));
+    assertThat(result.isEmpty(), is(true));
   }
 
   @Test
   public void shouldReturnOwnerIfKnown() {
     // Given:
-    givenOwnerMetadata(Optional.of(hostInfo));
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    final Optional<URI> url = result.map(KsqlNode::location);
+    final Optional<URI> url = result.stream().findFirst().map(KsqlNode::location);
     assertThat(url.map(URI::getScheme), is(Optional.of(LOCAL_HOST_URL.getProtocol())));
-    assertThat(url.map(URI::getHost), is(Optional.of(hostInfo.host())));
-    assertThat(url.map(URI::getPort), is(Optional.of(hostInfo.port())));
+    assertThat(url.map(URI::getHost), is(Optional.of(activeHostInfo.host())));
+    assertThat(url.map(URI::getPort), is(Optional.of(activeHostInfo.port())));
     assertThat(url.map(URI::getPath), is(Optional.of("/")));
   }
 
   @Test
   public void shouldReturnLocalOwnerIfSameAsSuppliedLocalHost() {
     // Given:
-    when(hostInfo.host()).thenReturn(LOCAL_HOST_URL.getHost());
-    when(hostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
-    givenOwnerMetadata(Optional.of(hostInfo));
+    when(activeHostInfo.host()).thenReturn(LOCAL_HOST_URL.getHost());
+    when(activeHostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result.map(KsqlNode::isLocal), is(Optional.of(true)));
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(true)));
   }
 
   @Test
   public void shouldReturnLocalOwnerIfExplicitlyLocalHostOnSamePortAsSuppliedLocalHost() {
     // Given:
-    when(hostInfo.host()).thenReturn("LocalHOST");
-    when(hostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
-    givenOwnerMetadata(Optional.of(hostInfo));
+    when(activeHostInfo.host()).thenReturn("LocalHOST");
+    when(activeHostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result.map(KsqlNode::isLocal), is(Optional.of(true)));
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(true)));
   }
 
   @Test
   public void shouldReturnRemoteOwnerForDifferentHost() {
     // Given:
-    when(hostInfo.host()).thenReturn("different");
-    when(hostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
-    givenOwnerMetadata(Optional.of(hostInfo));
+    when(activeHostInfo.host()).thenReturn("different");
+    when(activeHostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort());
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result.map(KsqlNode::isLocal), is(Optional.of(false)));
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(false)));
   }
 
   @Test
   public void shouldReturnRemoteOwnerForDifferentPort() {
     // Given:
-    when(hostInfo.host()).thenReturn(LOCAL_HOST_URL.getHost());
-    when(hostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort() + 1);
-    givenOwnerMetadata(Optional.of(hostInfo));
+    when(activeHostInfo.host()).thenReturn(LOCAL_HOST_URL.getHost());
+    when(activeHostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort() + 1);
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result.map(KsqlNode::isLocal), is(Optional.of(false)));
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(false)));
   }
 
   @Test
   public void shouldReturnRemoteOwnerForDifferentPortOnLocalHost() {
     // Given:
-    when(hostInfo.host()).thenReturn("LOCALhost");
-    when(hostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort() + 1);
-    givenOwnerMetadata(Optional.of(hostInfo));
+    when(activeHostInfo.host()).thenReturn("LOCALhost");
+    when(activeHostInfo.port()).thenReturn(LOCAL_HOST_URL.getPort() + 1);
+    getActiveAndStandbyMetadata();
 
     // When:
-    final Optional<KsqlNode> result = locator.locate(SOME_KEY);
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
 
     // Then:
-    assertThat(result.map(KsqlNode::isLocal), is(Optional.of(false)));
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(false)));
+  }
+
+  @Test
+  public void shouldReturnStandBysWhenActiveDown() {
+    // Given:
+    getActiveAndStandbyMetadata();
+    Map<String, HostInfo> hostStatus = ImmutableMap.of()
+
+    // When:
+    final List<KsqlNode> result = locator.locate(SOME_KEY, Optional.empty());
+
+    // Then:
+    assertThat(result.stream().findFirst().map(KsqlNode::isLocal), is(Optional.of(false)));
   }
 
   @SuppressWarnings({"unchecked", "deprecation"})
   private void givenOwnerMetadata(final Optional<HostInfo> hostInfo) {
-    final StreamsMetadata metadata = hostInfo
+    final KeyQueryMetadata metadata = hostInfo
         .map(hi -> {
-          final StreamsMetadata md = mock(StreamsMetadata.class);
-          when(md.hostInfo()).thenReturn(hostInfo.get());
+          final KeyQueryMetadata md = mock(KeyQueryMetadata.class);
+          when(md.getActiveHost()).thenReturn(hostInfo.get());
           return md;
         })
-        .orElse(StreamsMetadata.NOT_AVAILABLE);
+        .orElse(KeyQueryMetadata.NOT_AVAILABLE);
 
-    when(kafkaStreams.metadataForKey(any(), any(), any(Serializer.class)))
+    when(kafkaStreams.queryMetadataForKey(any(), any(), any(Serializer.class)))
         .thenReturn(metadata);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void getEmtpyMetadata() {
+    when(kafkaStreams.queryMetadataForKey(any(), any(), any(Serializer.class)))
+        .thenReturn(KeyQueryMetadata.NOT_AVAILABLE);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void getActiveAndStandbyMetadata() {
+    when(keyQueryMetadata.getActiveHost()).thenReturn(activeHostInfo);
+    when(keyQueryMetadata.getStandbyHosts()).thenReturn(ImmutableSet.of(
+        standByHostInfo1, standByHostInfo2));
+    when(kafkaStreams.queryMetadataForKey(any(), any(), any(Serializer.class)))
+        .thenReturn(keyQueryMetadata);
   }
 
   private static URL localHost() {
