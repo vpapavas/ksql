@@ -30,6 +30,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.ServiceInfo;
 import io.confluent.ksql.engine.KsqlEngine;
+import io.confluent.ksql.execution.streams.IRoutingFilter;
 import io.confluent.ksql.function.InternalFunctionRegistry;
 import io.confluent.ksql.function.MutableFunctionRegistry;
 import io.confluent.ksql.function.UserFunctionLoader;
@@ -52,6 +53,7 @@ import io.confluent.ksql.rest.server.computation.CommandStore;
 import io.confluent.ksql.rest.server.computation.InteractiveStatementExecutor;
 import io.confluent.ksql.rest.server.context.KsqlSecurityContextBinder;
 import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
+import io.confluent.ksql.rest.server.resources.ActiveStandbyResource;
 import io.confluent.ksql.rest.server.resources.ClusterStatusResource;
 import io.confluent.ksql.rest.server.resources.HealthCheckResource;
 import io.confluent.ksql.rest.server.resources.HeartbeatResource;
@@ -159,6 +161,11 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
   private final List<KsqlConfigurable> configurables;
   private final Consumer<KsqlConfig> rocksDBConfigSetterHandler;
   private final Optional<HeartbeatAgent> heartbeatAgent;
+  private final ActiveStandbyResource activeStandbyResource;
+
+  // Cannot be set in constructor, depends on parent server start
+  private KsqlConfig ksqlConfigWithPort;
+
 
   public static SourceName getCommandsStreamName() {
     return COMMANDS_STREAM_NAME;
@@ -186,7 +193,8 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
       final List<KsqlServerPrecondition> preconditions,
       final List<KsqlConfigurable> configurables,
       final Consumer<KsqlConfig> rocksDBConfigSetterHandler,
-      final Optional<HeartbeatAgent> heartbeatAgent
+      final Optional<HeartbeatAgent> heartbeatAgent,
+      final ActiveStandbyResource activeStandbyResource
   ) {
     super(restConfig);
 
@@ -211,6 +219,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     this.rocksDBConfigSetterHandler =
         requireNonNull(rocksDBConfigSetterHandler, "rocksDBConfigSetterHandler");
     this.heartbeatAgent = requireNonNull(heartbeatAgent, "heartbeatAgent");
+    this.activeStandbyResource = requireNonNull(activeStandbyResource, "activeStandbyResource");
   }
 
   @Override
@@ -224,8 +233,9 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     config.register(HealthCheckResource.create(ksqlResource, serviceContext, this.config));
     if (heartbeatAgent.isPresent()) {
       config.register(new HeartbeatResource(heartbeatAgent.get()));
-      config.register(new ClusterStatusResource(heartbeatAgent.get()));
+      config.register(new ClusterStatusResource(ksqlEngine, heartbeatAgent.get()));
     }
+    config.register(activeStandbyResource);
     config.register(new KsqlExceptionMapper());
     config.register(new ServerStateDynamicBinding(serverState));
   }
@@ -233,21 +243,30 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
   @Override
   public void startAsync() {
     log.info("KSQL RESTful API listening on {}", StringUtils.join(getListeners(), ", "));
-    final KsqlConfig ksqlConfigWithPort = buildConfigWithPort();
+    if (ksqlConfigWithPort == null) {
+      ksqlConfigWithPort = buildConfigWithPort();
+    }
     configurables.forEach(c -> c.configure(ksqlConfigWithPort));
-    startKsql(ksqlConfigWithPort);
+    startKsql();
     final Properties metricsProperties = new Properties();
     metricsProperties.putAll(getConfiguration().getOriginals());
     if (versionCheckerAgent != null) {
       versionCheckerAgent.start(KsqlModuleType.SERVER, metricsProperties);
     }
+    if (heartbeatAgent.isPresent()) {
+      heartbeatAgent.get().setLocalAddress((String)ksqlConfigWithPort
+          .getKsqlStreamConfigProps().get(StreamsConfig.APPLICATION_SERVER_CONFIG));
+      heartbeatAgent.get().startAgent();
+    }
+    activeStandbyResource.setLocalHostInfo((String)ksqlConfigWithPort
+        .getKsqlStreamConfigProps().get(StreamsConfig.APPLICATION_SERVER_CONFIG));
     displayWelcomeMessage();
   }
 
   @VisibleForTesting
-  void startKsql(final KsqlConfig ksqlConfigWithPort) {
+  void startKsql() {
     waitForPreconditions();
-    initialize(ksqlConfigWithPort);
+    initialize();
   }
 
   @VisibleForTesting
@@ -288,7 +307,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     );
   }
 
-  private void initialize(final KsqlConfig configWithApplicationServer) {
+  private void initialize() {
     rocksDBConfigSetterHandler.accept(ksqlConfigNoPort);
 
     registerCommandTopic();
@@ -309,12 +328,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         ksqlResource,
         serviceContext
     );
-
-    if (heartbeatAgent.isPresent()) {
-      heartbeatAgent.get().setLocalAddress((String)configWithApplicationServer
-          .getKsqlStreamConfigProps().get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-      heartbeatAgent.get().startAgent();
-    }
 
     serverState.setReady();
   }
@@ -448,6 +461,9 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
           ErrorMessages.class
       ));
 
+      final List<IRoutingFilter> routingFilters = ImmutableList.of(
+          new LivenessFilter(heartbeatAgent));
+
       container.addEndpoint(
           ServerEndpointConfig.Builder
               .create(
@@ -473,10 +489,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
                       securityExtension,
                       serverState,
                       serviceContext.getSchemaRegistryClientFactory(),
-                      restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
-                      // TODO fix after merge
-                      restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
-                      Optional.empty()
+                      routingFilters
                   );
                 }
               })
@@ -578,6 +591,11 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         ErrorMessages.class
     ));
 
+    final Optional<HeartbeatAgent> heartbeatAgent =
+        initializeHeartbeatAgent(restConfig, ksqlEngine, serviceContext);
+
+    final List<IRoutingFilter> routingFilters = ImmutableList.of(new LivenessFilter(heartbeatAgent));
+
     final StreamedQueryResource streamedQueryResource = new StreamedQueryResource(
         ksqlEngine,
         commandStore,
@@ -587,10 +605,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         versionChecker::updateLastRequestTime,
         authorizationValidator,
         errorHandler,
-        restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
-        // TODO fix after merge
-        restConfig.getBoolean(KsqlRestConfig.KSQL_QUERY_STANDBY_ENABLE_CONFIG),
-        Optional.empty()
+        routingFilters
     );
 
     final KsqlResource ksqlResource = new KsqlResource(
@@ -601,6 +616,8 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         authorizationValidator,
         errorHandler
     );
+
+    final ActiveStandbyResource activeStandbyResource = new ActiveStandbyResource(ksqlEngine);
 
     final List<String> managedTopics = new LinkedList<>();
     managedTopics.add(commandTopicName);
@@ -634,9 +651,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     final Consumer<KsqlConfig> rocksDBConfigSetterHandler =
         RocksDBConfigSetterHandler::maybeConfigureRocksDBConfigSetter;
 
-    final Optional<HeartbeatAgent> heartbeatAgent =
-        initializeHeartbeatAgent(restConfig, ksqlEngine, serviceContext);
-
     return new KsqlRestApplication(
         serviceContext,
         ksqlEngine,
@@ -656,7 +670,8 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         preconditions,
         configurables,
         rocksDBConfigSetterHandler,
-        heartbeatAgent
+        heartbeatAgent,
+        activeStandbyResource
     );
   }
 

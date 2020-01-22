@@ -18,6 +18,7 @@ package io.confluent.ksql.rest.client;
 import static java.util.Objects.requireNonNull;
 
 import io.confluent.ksql.properties.LocalProperties;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.CommandStatus;
 import io.confluent.ksql.rest.entity.CommandStatuses;
@@ -53,6 +54,7 @@ public final class KsqlTarget {
   private static final String QUERY_PATH = "/query";
   private static final String HEARTBEAT_PATH = "/heartbeat";
   private static final String CLUSTERSTATUS_PATH = "/clusterStatus";
+  private static final String ACTIVESTANDBY_PATH = "/activeStandby";
 
   private final WebTarget target;
   private final LocalProperties localProperties;
@@ -93,6 +95,10 @@ public final class KsqlTarget {
 
   public RestResponse<ClusterStatusResponse> getClusterStatus() {
     return get(CLUSTERSTATUS_PATH, ClusterStatusResponse.class);
+  }
+
+  public RestResponse<ActiveStandbyResponse> getActiveStandByInformation() {
+    return get(ACTIVESTANDBY_PATH, ActiveStandbyResponse.class);
   }
 
   public RestResponse<CommandStatuses> getStatuses() {

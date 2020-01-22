@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Confluent Inc.
+ * Copyright 2020 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"; you may not use
  * this file except in compliance with the License. You may obtain a copy of the
@@ -15,14 +15,12 @@
 
 package io.confluent.ksql.rest.server.resources;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.confluent.ksql.engine.KsqlEngine;
 import io.confluent.ksql.rest.entity.ActiveStandbyEntity;
-import io.confluent.ksql.rest.entity.ClusterStatusResponse;
-import io.confluent.ksql.rest.entity.HostInfoEntity;
-import io.confluent.ksql.rest.entity.HostStatusEntity;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.Versions;
-import io.confluent.ksql.rest.server.HeartbeatAgent;
-import io.confluent.ksql.rest.server.HeartbeatAgent.HostStatus;
+import io.confluent.ksql.rest.server.ServerUtil;
 import io.confluent.ksql.util.PersistentQueryMetadata;
 import io.confluent.ksql.util.QueryMetadata;
 import java.util.Collections;
@@ -40,59 +38,42 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
 /**
- * Endpoint that reports the view of the cluster that this server has.
- * Returns every host that has been discovered by this server along side with information about its
- * status such as whether it is alive or dead and the last time its status got updated.
+ * Endpoint for registering heartbeats received from remote servers. The heartbeats are used
+ * to determine the status of the remote servers, i.e. whether they are alive or dead.
  */
 
-@Path("/clusterStatus")
+@Path("/activeStandby")
 @Produces({Versions.KSQL_V1_JSON, MediaType.APPLICATION_JSON})
-public class ClusterStatusResource {
+public class ActiveStandbyResource {
 
   private final KsqlEngine engine;
-  private final HeartbeatAgent heartbeatAgent;
+  private HostInfo localHostInfo;
 
-  public ClusterStatusResource(final KsqlEngine engine,final HeartbeatAgent heartbeatAgent) {
+  public ActiveStandbyResource(final KsqlEngine engine) {
     this.engine = engine;
-    this.heartbeatAgent = heartbeatAgent;
+  }
+
+  public void setLocalHostInfo(final String applicationServerId) {
+    this.localHostInfo = ServerUtil.parseHostInfo(applicationServerId);
   }
 
   @GET
-  public Response checkClusterStatus() {
-    final ClusterStatusResponse response = getResponse();
-    return Response.ok(response).build();
+  public Response getActiveStandbyInformation() {
+    return Response.ok(getResponse()).build();
   }
 
-  private ClusterStatusResponse getResponse() {
-    Map<HostInfo, HostStatus> allHostStatus = heartbeatAgent.getHostsStatus();
-
-    Map<HostInfoEntity, HostStatusEntity> response = allHostStatus
-        .entrySet()
-        .stream()
-        .collect(Collectors.toMap(
-            entry -> new HostInfoEntity(entry.getKey().host(), entry.getKey().port()) ,
-            entry -> new HostStatusEntity(entry.getValue().isHostAlive(),
-                                          entry.getValue().getLastStatusUpdateMs(),
-                                          getActiveStandbyInformation(entry.getKey()))));
-
-    return new ClusterStatusResponse(response);
-  }
-
-  private Map<String, ActiveStandbyEntity> getActiveStandbyInformation(HostInfo hostInfo) {
+  @VisibleForTesting
+  ActiveStandbyResponse getResponse() {
     final List<PersistentQueryMetadata> currentQueries = engine.getPersistentQueries();
     if (currentQueries.isEmpty()) {
       // empty response
-      return Collections.emptyMap();
+      return new ActiveStandbyResponse(Collections.emptyMap());
     }
 
     final Map<String, ActiveStandbyEntity> perQueryMap = new HashMap<>();
     for (PersistentQueryMetadata persistentMetadata: currentQueries) {
-      for (StreamsMetadata streamsMetadata : persistentMetadata
-          .getAllMetadata()) {
-        if (streamsMetadata == null || !streamsMetadata.hostInfo().equals(hostInfo)) {
-          continue;
-        }
-        if (streamsMetadata == StreamsMetadata.NOT_AVAILABLE) {
+      for (StreamsMetadata streamsMetadata : ((QueryMetadata)persistentMetadata).getAllMetadata()) {
+        if (streamsMetadata == null || !streamsMetadata.hostInfo().equals(localHostInfo)) {
           continue;
         }
         final ActiveStandbyEntity entity = new ActiveStandbyEntity(
@@ -106,9 +87,10 @@ public class ClusterStatusResource {
                 .stream()
                 .map(TopicPartition::toString)
                 .collect(Collectors.toSet()));
-        perQueryMap.put(((QueryMetadata) persistentMetadata).getQueryApplicationId(), entity);
+        perQueryMap.put(((QueryMetadata)persistentMetadata).getQueryApplicationId(), entity);
       }
+
     }
-    return perQueryMap;
+    return new ActiveStandbyResponse(perQueryMap);
   }
 }

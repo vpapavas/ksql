@@ -210,7 +210,6 @@ public class WSQueryEndpointTest {
         serverState,
         schemaRegistryClientSupplier,
         false,
-        false,
         Optional.empty()
     );
   }
@@ -444,7 +443,6 @@ public class WSQueryEndpointTest {
         eq(exec),
         eq(configuredStatement),
         any(),
-        eq(false),
         eq(false),
         eq(Optional.empty()));
   }

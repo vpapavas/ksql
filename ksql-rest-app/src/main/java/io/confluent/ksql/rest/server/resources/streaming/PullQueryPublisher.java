@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.KsqlExecutionContext;
 import io.confluent.ksql.engine.KsqlEngine;
+import io.confluent.ksql.execution.streams.IRoutingFilter;
 import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.rest.entity.TableRowsEntity;
@@ -31,11 +32,8 @@ import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.statement.ConfiguredStatement;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.state.HostInfo;
 
 class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
 
@@ -43,20 +41,15 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
   private final ServiceContext serviceContext;
   private final ConfiguredStatement<Query> query;
   private final TheQueryExecutor pullQueryExecutor;
-  private final boolean queryStandbysEnabled;
-  private final boolean heartbeatEnabled;
-  private final Optional<Map<String, HostInfo>> hostStatuses;
+  private final List<IRoutingFilter> routingFilters;
 
   PullQueryPublisher(
       final KsqlEngine ksqlEngine,
       final ServiceContext serviceContext,
       final ConfiguredStatement<Query> query,
-      final boolean queryStandbysEnabled,
-      final boolean heartbeatEnabled,
-      final Optional<Map<String, HostInfo>> hostStatuses
+      final List<IRoutingFilter> routingFilters
   ) {
-    this(ksqlEngine, serviceContext, query, queryStandbysEnabled,
-         heartbeatEnabled, hostStatuses, PullQueryExecutor::execute);
+    this(ksqlEngine, serviceContext, query, routingFilters, PullQueryExecutor::execute);
   }
 
   @VisibleForTesting
@@ -64,26 +57,21 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
       final KsqlEngine ksqlEngine,
       final ServiceContext serviceContext,
       final ConfiguredStatement<Query> query,
-      final boolean queryStandbysEnabled,
-      final boolean heartbeatEnabled,
-      final Optional<Map<String, HostInfo>> hostStatuses,
+      final List<IRoutingFilter> routingFilters,
       final TheQueryExecutor pullQueryExecutor
   ) {
     this.ksqlEngine = requireNonNull(ksqlEngine, "ksqlEngine");
     this.serviceContext = requireNonNull(serviceContext, "serviceContext");
     this.query = requireNonNull(query, "query");
     this.pullQueryExecutor = requireNonNull(pullQueryExecutor, "pullQueryExecutor");
-    this.queryStandbysEnabled = queryStandbysEnabled;
-    this.heartbeatEnabled = heartbeatEnabled;
-    this.hostStatuses = hostStatuses;
+    this.routingFilters = requireNonNull(routingFilters, "routingFilters");
   }
 
   @Override
   public synchronized void subscribe(final Subscriber<Collection<StreamedRow>> subscriber) {
     final PullQuerySubscription subscription = new PullQuerySubscription(
         subscriber,
-        () -> pullQueryExecutor.execute(query, ksqlEngine, serviceContext, queryStandbysEnabled,
-                                        heartbeatEnabled, hostStatuses)
+        () -> pullQueryExecutor.execute(query, ksqlEngine, serviceContext, routingFilters)
     );
 
     subscriber.onSubscribe(subscription);
@@ -146,9 +134,7 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
         ConfiguredStatement<Query> statement,
         KsqlExecutionContext executionContext,
         ServiceContext serviceContext,
-        final boolean queryStandbysEnabled,
-        final boolean heartbeatEnabled,
-        final Optional<Map<String, HostInfo>> hostStatuses
+        List<IRoutingFilter> routingFilters
     );
   }
 }

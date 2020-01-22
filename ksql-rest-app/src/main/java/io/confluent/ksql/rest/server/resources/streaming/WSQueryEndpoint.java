@@ -20,6 +20,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.engine.KsqlEngine;
+import io.confluent.ksql.execution.streams.IRoutingFilter;
 import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
 import io.confluent.ksql.parser.tree.PrintTopic;
 import io.confluent.ksql.parser.tree.Query;
@@ -65,7 +66,6 @@ import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 import javax.ws.rs.core.Response;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,9 +101,7 @@ public class WSQueryEndpoint {
   private final ServerState serverState;
   private final Errors errorHandler;
   private final Supplier<SchemaRegistryClient> schemaRegistryClientFactory;
-  private final boolean queryStandbysEnabled;
-  private final boolean heartbeatEnabled;
-  private final Optional<Map<String, HostInfo>> hostStatuses;
+  private final List<IRoutingFilter> routingFilters;
 
   private WebSocketSubscriber<?> subscriber;
   private KsqlSecurityContext securityContext;
@@ -124,9 +122,7 @@ public class WSQueryEndpoint {
       final KsqlSecurityExtension securityExtension,
       final ServerState serverState,
       final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
-      final boolean queryStandbysEnabled,
-      final boolean heartbeatEnabled,
-      final Optional<Map<String, HostInfo>> hostStatuses
+      final List<IRoutingFilter> routingFilters
   ) {
     this(ksqlConfig,
         mapper,
@@ -146,9 +142,8 @@ public class WSQueryEndpoint {
         RestServiceContextFactory::create,
         serverState,
         schemaRegistryClientFactory,
-        queryStandbysEnabled,
-        heartbeatEnabled,
-        hostStatuses);
+        routingFilters
+    );
   }
 
   // CHECKSTYLE_RULES.OFF: ParameterNumberCheck
@@ -172,9 +167,7 @@ public class WSQueryEndpoint {
       final DefaultServiceContextFactory defaultServiceContextFactory,
       final ServerState serverState,
       final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
-      final boolean queryStandbysEnabled,
-      final boolean heartbeatEnabled,
-      final Optional<Map<String, HostInfo>> hostStatuses
+      final List<IRoutingFilter> routingFilters
   ) {
     this.ksqlConfig = Objects.requireNonNull(ksqlConfig, "ksqlConfig");
     this.mapper = Objects.requireNonNull(mapper, "mapper");
@@ -201,9 +194,7 @@ public class WSQueryEndpoint {
     this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");
     this.schemaRegistryClientFactory =
         Objects.requireNonNull(schemaRegistryClientFactory, "schemaRegistryClientFactory");
-    this.queryStandbysEnabled = queryStandbysEnabled;
-    this.heartbeatEnabled = heartbeatEnabled;
-    this.hostStatuses = hostStatuses;
+    this.routingFilters = Objects.requireNonNull(routingFilters, "routingFilters");
   }
 
   @SuppressWarnings("unused")
@@ -415,9 +406,7 @@ public class WSQueryEndpoint {
           exec,
           configured,
           streamSubscriber,
-          queryStandbysEnabled,
-          heartbeatEnabled,
-          hostStatuses
+          routingFilters
       );
     } else {
       pushQueryPublisher.start(
@@ -479,13 +468,10 @@ public class WSQueryEndpoint {
       final ListeningScheduledExecutorService ignored,
       final ConfiguredStatement<Query> query,
       final WebSocketSubscriber<StreamedRow> streamSubscriber,
-      final boolean queryStandbysEnabled,
-      final boolean heartbeatEnabled,
-      final Optional<Map<String, HostInfo>> hostStatuses
+      final List<IRoutingFilter> routingFilters
 
   ) {
-    new PullQueryPublisher(ksqlEngine, serviceContext, query, queryStandbysEnabled,
-                           heartbeatEnabled, hostStatuses)
+    new PullQueryPublisher(ksqlEngine, serviceContext, query, routingFilters)
         .subscribe(streamSubscriber);
   }
 
@@ -519,9 +505,7 @@ public class WSQueryEndpoint {
         ListeningScheduledExecutorService exec,
         ConfiguredStatement<Query> query,
         WebSocketSubscriber<StreamedRow> subscriber,
-        boolean queryStandbysEnabled,
-        boolean heartbeatEnabled,
-        Optional<Map<String, HostInfo>> hostStatuses);
+        List<IRoutingFilter> routingFilters);
 
   }
 

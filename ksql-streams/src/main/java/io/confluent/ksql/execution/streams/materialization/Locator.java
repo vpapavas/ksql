@@ -15,12 +15,11 @@
 
 package io.confluent.ksql.execution.streams.materialization;
 
+import io.confluent.ksql.execution.streams.IRoutingFilter;
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.streams.state.HostInfo;
 
 /**
  * Type used to locate on which KSQL node materialized data is stored.
@@ -39,8 +38,9 @@ public interface Locator {
    * @param key the required key.
    * @return the list of nodes, that can potentially serve the key.
    */
-  List<KsqlNode> locate(Struct key, Optional<Map<String, HostInfo>> hostStatuses);
-
+  List<KsqlNode> locate(
+      Struct key,
+      List<IRoutingFilter> routingFilters);
 
   interface KsqlNode {
 
@@ -53,5 +53,18 @@ public interface Locator {
      * @return The base URI of the node, including protocol, host and port.
      */
     URI location();
+
+    /**
+     * If heartbeat is not enabled, the value is ignored.
+     * @return {@code true} if this is node is alive as determined by the heartbeat mechanism.
+     *
+     */
+    boolean isAlive();
+
+    /**
+     * Specify liveness status of node as determined by heartbeat mechanism.
+     * @param alive Whether the node is alive or not
+     */
+    void setIsAlive(boolean alive);
   }
 }

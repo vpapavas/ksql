@@ -151,12 +151,6 @@ public class KsqlRestConfig extends RestConfig {
   private static final String KSQL_HEARTBEAT_THREAD_POOL_SIZE_CONFIG_DOC =
       "Size of thread pool used for sending / processing heartbeats and cluster discovery.";
 
-  public static final String KSQL_QUERY_STANDBY_ENABLE_CONFIG =
-      KSQL_CONFIG_PREFIX + "query.standby.enable";
-  private static final String KSQL_QUERY_STANDBY_ENABLE_DOC =
-      "Whether the queries are forwarded to standby hosts when the active is down."
-          + " It is disabled by default.";
-
 
   private static final ConfigDef CONFIG_DEF;
 
@@ -265,12 +259,6 @@ public class KsqlRestConfig extends RestConfig {
         3,
         Importance.MEDIUM,
         KSQL_HEARTBEAT_THREAD_POOL_SIZE_CONFIG_DOC
-    ).define(
-        KSQL_QUERY_STANDBY_ENABLE_CONFIG,
-        Type.BOOLEAN,
-        false,
-        Importance.MEDIUM,
-        KSQL_QUERY_STANDBY_ENABLE_DOC
     );
   }
 

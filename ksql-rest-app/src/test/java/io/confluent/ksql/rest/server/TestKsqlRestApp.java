@@ -400,6 +400,7 @@ public class TestKsqlRestApp extends ExternalResource {
 
     config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers.get());
     config.putIfAbsent(KsqlRestConfig.LISTENERS_CONFIG, "http://localhost:0,https://localhost:0");
+    //config.putIfAbsent(KsqlRestConfig.ADVERTISED_LISTENER_CONFIG, "http://localhost:1234");
     return new KsqlRestConfig(config);
   }
 

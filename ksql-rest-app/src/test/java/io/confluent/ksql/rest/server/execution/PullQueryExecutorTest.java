@@ -74,7 +74,6 @@ public class PullQueryExecutorTest {
           engine.getEngine(),
           engine.getServiceContext(),
           false,
-          false,
           Optional.empty()
       );
     }

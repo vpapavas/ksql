@@ -16,6 +16,7 @@
 package io.confluent.ksql.services;
 
 import io.confluent.ksql.rest.client.RestResponse;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
 import io.confluent.ksql.rest.entity.StreamedRow;
@@ -55,4 +56,12 @@ public interface SimpleKsqlClient {
    * @return response containing the cluster status.
    */
   RestResponse<ClusterStatusResponse> makeClusterStatusRequest(URI serverEndPoint);
+
+  /**
+   * Send a request to remote Ksql server to inquire about the state stores it is active and
+   * standby.
+   * @param serverEndPoint the remote destination.
+   * @return response containing the state stores for which the remote host is active and standby.
+   */
+  RestResponse<ActiveStandbyResponse> makeActiveStandbyRequest(URI serverEndPoint);
 }
