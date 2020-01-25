@@ -474,6 +474,11 @@ public final class HeartbeatAgent {
     public boolean isHostAlive() {
       return hostAlive;
     }
+
+    @Override
+    public String toString() {
+      return hostAlive + "," + lastStatusUpdateMs;
+    }
   }
 
   public static class HeartbeatInfo {

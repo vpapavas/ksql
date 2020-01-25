@@ -91,11 +91,8 @@ public class KsLocatorTest {
     when(standByHostInfo2.port()).thenReturn(5678);
 
     activeNode = locator.asNode(activeHostInfo);
-    activeNode.setIsAlive(true);
     standByNode1 = locator.asNode(standByHostInfo1);
-    standByNode1.setIsAlive(true);
     standByNode2 = locator.asNode(standByHostInfo2);
-    standByNode2.setIsAlive(true);
 
     hostsStatus = Optional.of(ImmutableMap.of(
         activeHostInfo, new HostStatusEntity(
@@ -245,8 +242,6 @@ public class KsLocatorTest {
   public void shouldReturnActiveAndStandBysWhenHeartBeatNotEnabled() {
     // Given:
     getActiveAndStandbyMetadata();
-    standByNode1.setIsAlive(false);
-    standByNode2.setIsAlive(false);
     when(livenessFilter.filter(activeHostInfo, any(), any())).thenReturn(true);
     when(livenessFilter.filter(standByHostInfo1, any(), any())).thenReturn(true);
     when(livenessFilter.filter(standByHostInfo2, any(), any())).thenReturn(true);

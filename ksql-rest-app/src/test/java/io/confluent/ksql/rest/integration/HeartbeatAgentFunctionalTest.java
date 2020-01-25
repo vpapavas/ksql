@@ -22,6 +22,7 @@ import io.confluent.common.utils.IntegrationTest;
 import io.confluent.ksql.integration.IntegrationTestHarness;
 import io.confluent.ksql.integration.Retry;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
+import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.server.KsqlRestConfig;
 import io.confluent.ksql.rest.server.TestKsqlRestApp;
 import io.confluent.ksql.serde.Format;
@@ -29,7 +30,6 @@ import io.confluent.ksql.test.util.secure.ClientTrustStore;
 import io.confluent.ksql.util.PageViewDataProvider;
 import java.util.concurrent.TimeUnit;
 import kafka.zookeeper.ZooKeeperClientException;
-import org.apache.kafka.streams.state.HostInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -45,8 +45,8 @@ public class HeartbeatAgentFunctionalTest {
   private static final String PAGE_VIEW_TOPIC = PAGE_VIEWS_PROVIDER.topicName();
   private static final String PAGE_VIEW_STREAM = PAGE_VIEWS_PROVIDER.kstreamName();
 
-  private static final HostInfo host0 = new HostInfo("localhost",8088);
-  private static final HostInfo host1 = new HostInfo("localhost",8089);
+  private static final HostInfoEntity host0 = new HostInfoEntity("localhost", 8088);
+  private static final HostInfoEntity host1 = new HostInfoEntity("localhost",8089);
   private static final IntegrationTestHarness TEST_HARNESS = IntegrationTestHarness.build();
   private static final TestKsqlRestApp REST_APP_0 = TestKsqlRestApp
       .builder(TEST_HARNESS::kafkaBootstrapServers)
@@ -112,8 +112,8 @@ public class HeartbeatAgentFunctionalTest {
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsUp);
 
     // Then:
-    assertThat(clusterStatusResponseUp.getClusterStatus().get(host0.toString()).getHostAlive(), is(true));
-    assertThat(clusterStatusResponseUp.getClusterStatus().get(host1.toString()).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp.getClusterStatus().get(host0).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp.getClusterStatus().get(host1).getHostAlive(), is(true));
   }
 
   @Test(timeout = 60000)
@@ -126,8 +126,8 @@ public class HeartbeatAgentFunctionalTest {
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsDown);
 
     // Then:
-    assertThat(clusterStatusResponse.getClusterStatus().get(host0.toString()).getHostAlive(), is(true));
-    assertThat(clusterStatusResponse.getClusterStatus().get(host1.toString()).getHostAlive(), is(false));
+    assertThat(clusterStatusResponse.getClusterStatus().get(host0).getHostAlive(), is(true));
+    assertThat(clusterStatusResponse.getClusterStatus().get(host1).getHostAlive(), is(false));
   }
 
   @Test(timeout = 60000)
@@ -141,16 +141,16 @@ public class HeartbeatAgentFunctionalTest {
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsUp);
 
     // Then:
-    assertThat(clusterStatusResponseUp1.getClusterStatus().get(host0.toString()).getHostAlive(), is(true));
-    assertThat(clusterStatusResponseUp1.getClusterStatus().get(host1.toString()).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp1.getClusterStatus().get(host0).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp1.getClusterStatus().get(host1).getHostAlive(), is(true));
 
     // When:
     ClusterStatusResponse clusterStatusResponseDown =  HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsDown);
 
     // Then:
-    assertThat(clusterStatusResponseDown.getClusterStatus().get(host0.toString()).getHostAlive(), is(true));
-    assertThat(clusterStatusResponseDown.getClusterStatus().get(host1.toString()).getHostAlive(), is(false));
+    assertThat(clusterStatusResponseDown.getClusterStatus().get(host0).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseDown.getClusterStatus().get(host1).getHostAlive(), is(false));
 
     // When :
     HighAvailabilityTestUtil.sendHeartbeartsEveryIntervalForWindowLength(REST_APP_0, host1, 100, 3000);
@@ -158,7 +158,7 @@ public class HeartbeatAgentFunctionalTest {
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsUp);
 
     // Then:
-    assertThat(clusterStatusResponseUp2.getClusterStatus().get(host0.toString()).getHostAlive(), is(true));
-    assertThat(clusterStatusResponseUp2.getClusterStatus().get(host1.toString()).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp2.getClusterStatus().get(host0).getHostAlive(), is(true));
+    assertThat(clusterStatusResponseUp2.getClusterStatus().get(host1).getHostAlive(), is(true));
   }
 }

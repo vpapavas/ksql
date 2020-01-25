@@ -82,4 +82,14 @@ public class ActiveStandbyEntity {
   public int hashCode() {
     return Objects.hash(activeStores, standByStores, activePartitions, standByPartitions);
   }
+
+  @Override
+  public String toString() {
+    return new StringBuilder()
+        .append("Active stores = ").append(activeStores)
+        .append(", Active partitions = ").append(activePartitions)
+        .append(", Standby stores = ").append(standByStores)
+        .append(", Standby partitions = ").append(standByPartitions)
+        .toString();
+  }
 }

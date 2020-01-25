@@ -64,9 +64,9 @@ public class ClusterStatusResource {
   }
 
   private ClusterStatusResponse getResponse() {
-    Map<HostInfo, HostStatus> allHostStatus = heartbeatAgent.getHostsStatus();
+    final Map<HostInfo, HostStatus> allHostStatus = heartbeatAgent.getHostsStatus();
 
-    Map<HostInfoEntity, HostStatusEntity> response = allHostStatus
+    final Map<HostInfoEntity, HostStatusEntity> response = allHostStatus
         .entrySet()
         .stream()
         .collect(Collectors.toMap(
@@ -78,7 +78,7 @@ public class ClusterStatusResource {
     return new ClusterStatusResponse(response);
   }
 
-  private Map<String, ActiveStandbyEntity> getActiveStandbyInformation(HostInfo hostInfo) {
+  private Map<String, ActiveStandbyEntity> getActiveStandbyInformation(final HostInfo hostInfo) {
     final List<PersistentQueryMetadata> currentQueries = engine.getPersistentQueries();
     if (currentQueries.isEmpty()) {
       // empty response

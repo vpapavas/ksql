@@ -209,8 +209,7 @@ public class WSQueryEndpointTest {
         defaultServiceContextProvider,
         serverState,
         schemaRegistryClientSupplier,
-        false,
-        Optional.empty()
+        Collections.emptyList()
     );
   }
 
@@ -443,8 +442,7 @@ public class WSQueryEndpointTest {
         eq(exec),
         eq(configuredStatement),
         any(),
-        eq(false),
-        eq(Optional.empty()));
+        any());
   }
 
   @Test

@@ -60,7 +60,8 @@ public class HostStatusEntity {
     this.lastStatusUpdateMs = lastStatusUpdateMs;
   }
 
-  public void setPerQueryActiveStandbyEntity(final Map<String, ActiveStandbyEntity> perQueryActiveStandbyEntity) {
+  public void setPerQueryActiveStandbyEntity(
+      final Map<String, ActiveStandbyEntity> perQueryActiveStandbyEntity) {
     this.perQueryActiveStandbyEntity = perQueryActiveStandbyEntity;
   }
 
@@ -78,7 +79,6 @@ public class HostStatusEntity {
     return hostAlive == that.hostAlive
         && lastStatusUpdateMs == that.lastStatusUpdateMs
         && perQueryActiveStandbyEntity.equals(that.perQueryActiveStandbyEntity);
-
   }
 
   @Override

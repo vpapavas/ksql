@@ -31,6 +31,8 @@ import io.confluent.ksql.rest.client.KsqlRestClient;
 import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ActiveStandbyEntity;
 import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
+import io.confluent.ksql.rest.entity.ClusterStatusResponse;
+import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.rest.server.KsqlRestConfig;
 import io.confluent.ksql.rest.server.TestKsqlRestApp;
@@ -50,7 +52,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import kafka.zookeeper.ZooKeeperClientException;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.state.HostInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -79,9 +80,9 @@ public class PullQueryRoutingFunctionalTest {
       throw new AssertionError("Failed to init TMP", e);
     }
   }
-  private static final HostInfo host0 = new HostInfo("localhost", 8088);
-  private static final HostInfo host1 = new HostInfo("localhost",8089);
-  private static final HostInfo host2 = new HostInfo("localhost",8087);
+  private static final HostInfoEntity host0 = new HostInfoEntity("localhost", 8088);
+  private static final HostInfoEntity host1 = new HostInfoEntity("localhost",8089);
+  private static final HostInfoEntity host2 = new HostInfoEntity("localhost",8087);
   private static final String USER_TOPIC = "user_topic";
   private static final String USERS_STREAM = "users";
   private static final UserDataProvider USER_PROVIDER = new UserDataProvider();
@@ -266,9 +267,10 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
     waitForStreamsMetadataToInitialize();
     ClusterFormation clusterFormation = findClusterFormation();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, clusterFormation.router.right);
+    System.out.println("---------------> Cluster Formation: " + clusterFormation);
     HighAvailabilityTestUtil.sendHeartbeartsEveryIntervalForWindowLength(
         clusterFormation.router.right, clusterFormation.standBy.left, 100, 2000);
     HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
@@ -298,8 +300,10 @@ public class PullQueryRoutingFunctionalTest {
 
   private void waitForStreamsMetadataToInitialize() {
     while (true) {
-      ActiveStandbyResponse response0 = makeActiveStandbyRequest(REST_APP_0);
-      if(response0.getPerQueryInfo().get(QUERY_ID) != null) {
+      ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.sendClusterStatusRequest(REST_APP_0);
+      if(clusterStatusResponse.getClusterStatus().get(host0).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null
+      && clusterStatusResponse.getClusterStatus().get(host1).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null
+      && clusterStatusResponse.getClusterStatus().get(host2).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null) {
         break;
       }
       try {
@@ -312,12 +316,15 @@ public class PullQueryRoutingFunctionalTest {
 
   private static ClusterFormation findClusterFormation() {
     ClusterFormation clusterFormation = new ClusterFormation();
-    ActiveStandbyResponse response0 = makeActiveStandbyRequest(REST_APP_0);
-    ActiveStandbyEntity entity0 = response0.getPerQueryInfo().get(QUERY_ID);
-    ActiveStandbyResponse response1 = makeActiveStandbyRequest(REST_APP_1);
-    ActiveStandbyEntity entity1 = response1.getPerQueryInfo().get(QUERY_ID);
-    ActiveStandbyResponse response2 = makeActiveStandbyRequest(REST_APP_2);
-    ActiveStandbyEntity entity2 = response2.getPerQueryInfo().get(QUERY_ID);
+    ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.sendClusterStatusRequest(REST_APP_0);
+    ActiveStandbyEntity entity0 = clusterStatusResponse.getClusterStatus().get(host0)
+        .getPerQueryActiveStandbyEntity().get(QUERY_ID);
+    ActiveStandbyEntity entity1 = clusterStatusResponse.getClusterStatus().get(host1)
+        .getPerQueryActiveStandbyEntity().get(QUERY_ID);
+    ActiveStandbyEntity entity2 = clusterStatusResponse.getClusterStatus().get(host2)
+        .getPerQueryActiveStandbyEntity().get(QUERY_ID);
+
+    System.out.println(" --------> ClusterStatusResponse = " + clusterStatusResponse);
 
     // find active
     if(!entity0.getActiveStores().isEmpty() && !entity0.getActivePartitions().isEmpty()) {
@@ -367,23 +374,31 @@ public class PullQueryRoutingFunctionalTest {
   }
 
   static class ClusterFormation {
-    Pair<HostInfo, TestKsqlRestApp> active;
-    Pair<HostInfo, TestKsqlRestApp> standBy;
-    Pair<HostInfo, TestKsqlRestApp> router;
+    Pair<HostInfoEntity, TestKsqlRestApp> active;
+    Pair<HostInfoEntity, TestKsqlRestApp> standBy;
+    Pair<HostInfoEntity, TestKsqlRestApp> router;
 
     ClusterFormation() {
     }
 
-    public void setActive(final Pair<HostInfo, TestKsqlRestApp> active) {
+    public void setActive(final Pair<HostInfoEntity, TestKsqlRestApp> active) {
       this.active = active;
     }
 
-    public void setStandBy(final Pair<HostInfo, TestKsqlRestApp> standBy) {
+    public void setStandBy(final Pair<HostInfoEntity, TestKsqlRestApp> standBy) {
       this.standBy = standBy;
     }
 
-    public void setRouter(final Pair<HostInfo, TestKsqlRestApp> router) {
+    public void setRouter(final Pair<HostInfoEntity, TestKsqlRestApp> router) {
       this.router = router;
+    }
+
+    public String toString() {
+      return new StringBuilder()
+          .append("Active = ").append(active.left)
+          .append(", Standby = ").append(standBy.left)
+          .append(", Router = ").append(router.left)
+          .toString();
     }
   }
 

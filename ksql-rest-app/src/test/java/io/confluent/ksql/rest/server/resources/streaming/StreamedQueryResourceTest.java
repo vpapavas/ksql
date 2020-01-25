@@ -178,9 +178,7 @@ public class StreamedQueryResourceTest {
         activenessRegistrar,
         Optional.of(authorizationValidator),
         errorsHandler,
-        false,
-        false,
-        Optional.empty()
+        Collections.emptyList()
     );
 
     testResource.configure(VALID_CONFIG);
@@ -207,9 +205,7 @@ public class StreamedQueryResourceTest {
         activenessRegistrar,
         Optional.of(authorizationValidator),
         errorsHandler,
-        false,
-        false,
-        Optional.empty()
+        Collections.emptyList()
     );
 
     // Then:

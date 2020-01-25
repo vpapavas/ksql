@@ -79,7 +79,7 @@ final class KsLocator implements Locator {
 
     LOG.debug("Before filtering: Active host {} , standby hosts {}", activeHost, standByHosts);
 
-    List<HostInfo> hosts = new ArrayList<>();
+    final List<HostInfo> hosts = new ArrayList<>();
     hosts.add(activeHost);
     hosts.addAll(standByHosts);
 
@@ -87,17 +87,18 @@ final class KsLocator implements Locator {
     // The list is ordered by routing preference: active node is first, then standby nodes
     // in order of increasing lag.
     // If heartbeat is not enabled, all hosts are considered alive.
-    List<KsqlNode> filteredHosts = new ArrayList<>();
-    routingFilters
-        .forEach(routingFilter -> hosts
-            .stream()
-            .filter(hostInfo -> routingFilter
+    final List<KsqlNode> filteredHosts = new ArrayList<>();
+    for (IRoutingFilter routingFilter : routingFilters) {
+      filteredHosts.addAll(
+          hosts
+              .stream()
+              .filter(hostInfo -> routingFilter
                 .filter(hostInfo, stateStoreName, metadata.getPartition()))
-            .map(this::asNode)
-            .collect(Collectors.toList())
-        .addAll(filteredHosts));
+              .map(this::asNode)
+              .collect(Collectors.toList()));
+    }
 
-    LOG.debug("Filtered and ordered hosts: {}", filteredHosts);
+    LOG.info("Filtered and ordered hosts: {}", filteredHosts);
     return filteredHosts;
   }
 
@@ -137,12 +138,10 @@ final class KsLocator implements Locator {
 
     private final boolean local;
     private final URI location;
-    private boolean isAlive;
 
     private Node(final boolean local, final URI location) {
       this.local = local;
       this.location = requireNonNull(location, "location");
-      this.isAlive = false;
     }
 
     @Override
@@ -155,22 +154,12 @@ final class KsLocator implements Locator {
       return location;
     }
 
-    public boolean isAlive() {
-      return isAlive;
-    }
-
-    public void setIsAlive(final boolean alive) {
-      isAlive = alive;
-    }
-
     @Override
     public String toString() {
       return new StringBuilder()
           .append(String.format("local = %s ,", local))
           .append(String.format("location = %s ,", location))
-          .append(String.format("alive = %s .", isAlive))
           .toString();
-
     }
 
     @Override
@@ -185,13 +174,12 @@ final class KsLocator implements Locator {
 
       final Node that = (Node) o;
       return local == that.local
-          && location.equals(that.location)
-          && isAlive == that.isAlive;
+          && location.equals(that.location);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(local, location, isAlive);
+      return Objects.hash(local, location);
     }
 
   }

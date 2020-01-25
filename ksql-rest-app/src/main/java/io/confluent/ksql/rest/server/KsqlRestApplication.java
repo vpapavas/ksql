@@ -594,7 +594,8 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     final Optional<HeartbeatAgent> heartbeatAgent =
         initializeHeartbeatAgent(restConfig, ksqlEngine, serviceContext);
 
-    final List<IRoutingFilter> routingFilters = ImmutableList.of(new LivenessFilter(heartbeatAgent));
+    final List<IRoutingFilter> routingFilters = ImmutableList.of(
+        new LivenessFilter(heartbeatAgent));
 
     final StreamedQueryResource streamedQueryResource = new StreamedQueryResource(
         ksqlEngine,

@@ -165,7 +165,7 @@ public class KsqlConfig extends AbstractConfig {
       "Config to enable or disable transient pull queries on a specific KSQL server.";
   public static final boolean KSQL_QUERY_PULL_ENABLE_DEFAULT = true;
 
-  // TODO shall we remove this config?
+  // Shall we remove this config?
   public static final String KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_CONFIG =
       "ksql.query.pull.routing.timeout.ms";
   public static final Long KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_DEFAULT = 30000L;

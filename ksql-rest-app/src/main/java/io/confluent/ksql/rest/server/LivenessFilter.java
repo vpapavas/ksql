@@ -18,7 +18,7 @@ package io.confluent.ksql.rest.server;
 import static java.util.Objects.requireNonNull;
 
 import io.confluent.ksql.execution.streams.IRoutingFilter;
-import io.confluent.ksql.rest.entity.HostStatusEntity;
+import io.confluent.ksql.rest.server.HeartbeatAgent.HostStatus;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.streams.state.HostInfo;
@@ -27,18 +27,20 @@ public class LivenessFilter implements IRoutingFilter {
 
   private final Optional<HeartbeatAgent> heartbeatAgent;
 
-  public LivenessFilter(Optional<HeartbeatAgent> heartbeatAgent) {
+  public LivenessFilter(final Optional<HeartbeatAgent> heartbeatAgent) {
     this.heartbeatAgent = requireNonNull(heartbeatAgent, "heartbeatAgent");
   }
 
   @Override
-  public boolean filter(final HostInfo hostInfo, String storeName, int partition) {
+  public boolean filter(final HostInfo hostInfo, final String storeName, final int partition) {
     if (heartbeatAgent.isPresent()) {
-      Map<String, HostStatusEntity> hostStatus = heartbeatAgent.get().getHostsStatus();
-      if (!hostStatus.containsKey(hostInfo.toString())) {
+      final Map<HostInfo, HostStatus> hostStatus = heartbeatAgent.get().getHostsStatus();
+      if (!hostStatus.containsKey(hostInfo)) {
         return true;
       }
-      return hostStatus.get(hostInfo.toString()).getHostAlive();
+      System.out.println("-------------> Host " + hostInfo
+                             + " is alive " + hostStatus.get(hostInfo).isHostAlive());
+      return hostStatus.get(hostInfo).isHostAlive();
     }
     return true;
   }

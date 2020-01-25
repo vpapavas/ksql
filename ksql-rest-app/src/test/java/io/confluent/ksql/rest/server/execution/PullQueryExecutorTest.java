@@ -33,7 +33,7 @@ import io.confluent.ksql.rest.server.validation.CustomValidators;
 import io.confluent.ksql.statement.ConfiguredStatement;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.KsqlException;
-import java.util.Optional;
+import java.util.Collections;
 import org.eclipse.jetty.http.HttpStatus.Code;
 import org.junit.Rule;
 import org.junit.Test;
@@ -73,8 +73,7 @@ public class PullQueryExecutorTest {
           query,
           engine.getEngine(),
           engine.getServiceContext(),
-          false,
-          Optional.empty()
+          Collections.emptyList()
       );
     }
   }

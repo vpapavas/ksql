@@ -216,14 +216,12 @@ public final class PullQueryExecutor {
     }
 
     if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS)) {
+      System.out.println("---------> Query standby enabled");
       for (KsqlNode node : filteredAndOrderedNodes) {
         try {
           return routeQuery(node, statement, executionContext, serviceContext, pullQueryContext);
         } catch (Throwable t) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Error routing query {} to host {} ",
-                      statement.getStatementText(), node, t);
-          }
+          LOG.info("Error routing query {} to host {} ", statement.getStatementText(), node, t);
         }
       }
     } else {
@@ -246,22 +244,20 @@ public final class PullQueryExecutor {
       final PullQueryContext pullQueryContext
   ) {
     try {
+      System.out.println("---------> Route Query to host " + node);
       if (node.isLocal()) {
-        LOG.debug("Query {} executed locally at host {}.",
-                  statement.getStatementText(), node.location());
+        LOG.info("Query {} executed locally at host {}.",
+                 statement.getStatementText(), node.location());
         return queryRowsLocally(
             statement,
             executionContext,
             pullQueryContext);
       } else {
-        LOG.debug("Query {} routed to host {}.",
-                  statement.getStatementText(), node.location());
+        LOG.info("Query {} routed to host {}.", statement.getStatementText(), node.location());
         return forwardTo(node, statement, serviceContext);
       }
     } catch (Throwable t) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Error routing query " + statement.getStatementText() + " to " + node, t);
-      }
+      LOG.info("Error routing query " + statement.getStatementText() + " to " + node, t);
     }
     throw new MaterializationException(
         "Unable to execute pull query :" + statement.getStatementText());

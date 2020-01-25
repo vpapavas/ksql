@@ -53,18 +53,5 @@ public interface Locator {
      * @return The base URI of the node, including protocol, host and port.
      */
     URI location();
-
-    /**
-     * If heartbeat is not enabled, the value is ignored.
-     * @return {@code true} if this is node is alive as determined by the heartbeat mechanism.
-     *
-     */
-    boolean isAlive();
-
-    /**
-     * Specify liveness status of node as determined by heartbeat mechanism.
-     * @param alive Whether the node is alive or not
-     */
-    void setIsAlive(boolean alive);
   }
 }

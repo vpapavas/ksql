@@ -59,4 +59,9 @@ public final class ClusterStatusResponse {
   public int hashCode() {
     return Objects.hash(clusterStatus);
   }
+
+  @Override
+  public String toString() {
+    return "ClusterStatus = " + clusterStatus;
+  }
 }

@@ -24,7 +24,6 @@ import io.confluent.ksql.rest.server.TestKsqlRestApp;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.BiFunction;
-import org.apache.kafka.streams.state.HostInfo;
 
 class HighAvailabilityTestUtil {
 
@@ -44,7 +43,7 @@ class HighAvailabilityTestUtil {
 
   static boolean allServersDiscovered(
       final int numServers,
-      final Map<String, HostStatusEntity> clusterStatus) {
+      final Map<HostInfoEntity, HostStatusEntity> clusterStatus) {
 
     if(clusterStatus.size() < numServers) {
       return false;
@@ -54,7 +53,7 @@ class HighAvailabilityTestUtil {
 
   static void sendHeartbeartsEveryIntervalForWindowLength(
       final TestKsqlRestApp receiverApp,
-      final HostInfo sender,
+      final HostInfoEntity sender,
       final long interval,
       final long window) {
     long start = System.currentTimeMillis();
@@ -70,8 +69,8 @@ class HighAvailabilityTestUtil {
 
   static ClusterStatusResponse  waitForRemoteServerToChangeStatus(
       final TestKsqlRestApp restApp,
-      final HostInfo remoteServer,
-      final BiFunction<HostInfo, Map<String, HostStatusEntity>, Boolean> function)
+      final HostInfoEntity remoteServer,
+      final BiFunction<HostInfoEntity, Map<HostInfoEntity, HostStatusEntity>, Boolean> function)
   {
     while (true) {
       final ClusterStatusResponse clusterStatusResponse = sendClusterStatusRequest(restApp);
@@ -87,13 +86,13 @@ class HighAvailabilityTestUtil {
   }
 
   static boolean remoteServerIsDown(
-      final HostInfo remoteServer,
-      final Map<String, HostStatusEntity> clusterStatus) {
-    if (!clusterStatus.containsKey(remoteServer.toString())) {
+      final HostInfoEntity remoteServer,
+      final Map<HostInfoEntity, HostStatusEntity> clusterStatus) {
+    if (!clusterStatus.containsKey(remoteServer)) {
       return true;
     }
-    for( Entry<String, HostStatusEntity> entry: clusterStatus.entrySet()) {
-      if (entry.getKey().contains(String.valueOf(remoteServer.port()))
+    for( Entry<HostInfoEntity, HostStatusEntity> entry: clusterStatus.entrySet()) {
+      if (entry.getKey().getPort() == remoteServer.getPort()
           && !entry.getValue().getHostAlive()) {
         return true;
       }
@@ -102,10 +101,10 @@ class HighAvailabilityTestUtil {
   }
 
   static boolean remoteServerIsUp(
-      final HostInfo remoteServer,
-      final Map<String, HostStatusEntity> clusterStatus) {
-    for( Entry<String, HostStatusEntity> entry: clusterStatus.entrySet()) {
-      if (entry.getKey().contains(String.valueOf(remoteServer.port()))
+      final HostInfoEntity remoteServer,
+      final Map<HostInfoEntity, HostStatusEntity> clusterStatus) {
+    for( Entry<HostInfoEntity, HostStatusEntity> entry: clusterStatus.entrySet()) {
+      if (entry.getKey().getPort() == remoteServer.getPort()
           && entry.getValue().getHostAlive()) {
         return true;
       }
@@ -115,11 +114,11 @@ class HighAvailabilityTestUtil {
 
   static void sendHeartbeatRequest(
       final TestKsqlRestApp restApp,
-      final HostInfo host,
+      final HostInfoEntity hostInfoEntity,
       final long timestamp) {
 
     try (final KsqlRestClient restClient = restApp.buildKsqlClient()) {
-      restClient.makeAsyncHeartbeatRequest(new HostInfoEntity(host.host(), host.port()), timestamp);
+      restClient.makeAsyncHeartbeatRequest(hostInfoEntity, timestamp);
     }
   }
 
