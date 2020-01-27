@@ -27,10 +27,7 @@ import io.confluent.common.utils.IntegrationTest;
 import io.confluent.ksql.integration.IntegrationTestHarness;
 import io.confluent.ksql.integration.Retry;
 import io.confluent.ksql.name.ColumnName;
-import io.confluent.ksql.rest.client.KsqlRestClient;
-import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ActiveStandbyEntity;
-import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.StreamedRow;
@@ -56,8 +53,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TemporaryFolder;
 
@@ -88,10 +87,10 @@ public class PullQueryRoutingFunctionalTest {
   private static final UserDataProvider USER_PROVIDER = new UserDataProvider();
   private static final Format VALUE_FORMAT = Format.JSON;
   private static final int HEADER = 1;
-
+  private static String output;
   private static final IntegrationTestHarness TEST_HARNESS = IntegrationTestHarness.build();
-
   private static final int BASE_TIME = 1_000_000;
+  private static final String QUERY_ID = "_confluent-ksql-default_query_CTAS_ID_0_0";
 
   private static final PhysicalSchema AGGREGATE_SCHEMA = PhysicalSchema.from(
       LogicalSchema.builder()
@@ -99,8 +98,6 @@ public class PullQueryRoutingFunctionalTest {
           .build(),
       SerdeOption.none()
   );
-
-  private static final String QUERY_ID = "_confluent-ksql-default_query_CTAS_ID_0_0";
 
   private static final TestKsqlRestApp REST_APP_0 = TestKsqlRestApp
       .builder(TEST_HARNESS::kafkaBootstrapServers)
@@ -152,7 +149,8 @@ public class PullQueryRoutingFunctionalTest {
       .around(REST_APP_1)
       .around(REST_APP_2);
 
-  private static String output;
+  @Rule
+  public final ExpectedException expectedException = ExpectedException.none();
 
   @BeforeClass
   public static void setUpClass() {
@@ -186,6 +184,7 @@ public class PullQueryRoutingFunctionalTest {
     REST_APP_1.start();
     REST_APP_2.start();
     output = KsqlIdentifierTestUtil.uniqueIdentifierName();
+
   }
 
   @After
@@ -194,7 +193,6 @@ public class PullQueryRoutingFunctionalTest {
     REST_APP_1.stop();
     REST_APP_2.stop();
   }
-
 
   @Test(timeout = 60000)
   public void shouldQueryActiveWhenActiveAliveQueryIssuedToStandby() {
@@ -207,11 +205,12 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
-    waitForStreamsMetadataToInitialize();
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
+    HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
+        REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, clusterFormation.standBy.right);
-    HighAvailabilityTestUtil.sendHeartbeartsEveryIntervalForWindowLength(
-        clusterFormation.standBy.right, clusterFormation.active.left, 100, 2000);
+    HighAvailabilityTestUtil.sendHeartbeartsForWindowLength(
+        clusterFormation.standBy.right, clusterFormation.active.left, 2000);
     HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
         clusterFormation.standBy.right, clusterFormation.active.left, HighAvailabilityTestUtil::remoteServerIsUp);
 
@@ -224,7 +223,6 @@ public class PullQueryRoutingFunctionalTest {
     assertThat(rows_0.get(1).getRow().get().getColumns(), is(ImmutableList.of(key, BASE_TIME, 1)));
   }
 
-
   @Test(timeout = 60000)
   public void shouldQueryActiveWhenActiveAliveStandbyDeadQueryIssuedToRouter() {
     // Given:
@@ -236,11 +234,12 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
-    waitForStreamsMetadataToInitialize();
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
+    HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
+        REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, clusterFormation.router.right);
-    HighAvailabilityTestUtil.sendHeartbeartsEveryIntervalForWindowLength(
-        clusterFormation.router.right, clusterFormation.active.left, 100, 2000);
+    HighAvailabilityTestUtil.sendHeartbeartsForWindowLength(
+        clusterFormation.router.right, clusterFormation.active.left, 2000);
     HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
         clusterFormation.router.right,
         clusterFormation.active.left,
@@ -255,7 +254,6 @@ public class PullQueryRoutingFunctionalTest {
     assertThat(rows_0.get(1).getRow().get().getColumns(), is(ImmutableList.of(key, BASE_TIME, 1)));
   }
 
-
   @Test(timeout = 60000)
   public void shouldQueryStandbyWhenActiveDeadStandbyAliveQueryIssuedToRouter() {
     // Given:
@@ -268,11 +266,11 @@ public class PullQueryRoutingFunctionalTest {
     );
     waitForTableRows();
     HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
-    waitForStreamsMetadataToInitialize();
+    HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
+        REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
-    System.out.println("---------------> Cluster Formation: " + clusterFormation);
-    HighAvailabilityTestUtil.sendHeartbeartsEveryIntervalForWindowLength(
-        clusterFormation.router.right, clusterFormation.standBy.left, 100, 2000);
+    HighAvailabilityTestUtil.sendHeartbeartsForWindowLength(
+        clusterFormation.router.right, clusterFormation.standBy.left, 2000);
     HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
         clusterFormation.router.right,
         clusterFormation.standBy.left,
@@ -298,22 +296,6 @@ public class PullQueryRoutingFunctionalTest {
     RestIntegrationTestUtil.makeKsqlRequest(REST_APP_0, sql, Optional.empty());
   }
 
-  private void waitForStreamsMetadataToInitialize() {
-    while (true) {
-      ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.sendClusterStatusRequest(REST_APP_0);
-      if(clusterStatusResponse.getClusterStatus().get(host0).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null
-      && clusterStatusResponse.getClusterStatus().get(host1).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null
-      && clusterStatusResponse.getClusterStatus().get(host2).getPerQueryActiveStandbyEntity().get(QUERY_ID) != null) {
-        break;
-      }
-      try {
-        Thread.sleep(200);
-      } catch (final Exception e) {
-        // Meh
-      }
-    }
-  }
-
   private static ClusterFormation findClusterFormation() {
     ClusterFormation clusterFormation = new ClusterFormation();
     ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.sendClusterStatusRequest(REST_APP_0);
@@ -323,8 +305,6 @@ public class PullQueryRoutingFunctionalTest {
         .getPerQueryActiveStandbyEntity().get(QUERY_ID);
     ActiveStandbyEntity entity2 = clusterStatusResponse.getClusterStatus().get(host2)
         .getPerQueryActiveStandbyEntity().get(QUERY_ID);
-
-    System.out.println(" --------> ClusterStatusResponse = " + clusterStatusResponse);
 
     // find active
     if(!entity0.getActiveStores().isEmpty() && !entity0.getActivePartitions().isEmpty()) {
@@ -357,20 +337,6 @@ public class PullQueryRoutingFunctionalTest {
     }
 
     return clusterFormation;
-  }
-
-  private static ActiveStandbyResponse makeActiveStandbyRequest(final TestKsqlRestApp restApp) {
-
-    try (final KsqlRestClient restClient = restApp.buildKsqlClient()) {
-
-      final RestResponse<ActiveStandbyResponse> res = restClient.makeActiveStandbyRequest();
-
-      if (res.isErroneous()) {
-        throw new AssertionError("Erroneous result: " + res.getErrorMessage());
-      }
-
-      return res.getResponse();
-    }
   }
 
   static class ClusterFormation {

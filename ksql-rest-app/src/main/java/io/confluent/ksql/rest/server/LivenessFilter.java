@@ -38,8 +38,6 @@ public class LivenessFilter implements IRoutingFilter {
       if (!hostStatus.containsKey(hostInfo)) {
         return true;
       }
-      System.out.println("-------------> Host " + hostInfo
-                             + " is alive " + hostStatus.get(hostInfo).isHostAlive());
       return hostStatus.get(hostInfo).isHostAlive();
     }
     return true;

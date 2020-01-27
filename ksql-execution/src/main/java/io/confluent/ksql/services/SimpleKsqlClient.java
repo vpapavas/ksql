@@ -58,8 +58,8 @@ public interface SimpleKsqlClient {
   RestResponse<ClusterStatusResponse> makeClusterStatusRequest(URI serverEndPoint);
 
   /**
-   * Send a request to remote Ksql server to inquire about the state stores it is active and
-   * standby.
+   * Send a request to remote Ksql server to inquire to inquire about which state stores the
+   * remote server maintains as an active and standby.
    * @param serverEndPoint the remote destination.
    * @return response containing the state stores for which the remote host is active and standby.
    */

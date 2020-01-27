@@ -21,10 +21,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.errorprone.annotations.Immutable;
 import io.confluent.ksql.execution.streams.IRoutingFilter;
 import io.confluent.ksql.execution.streams.materialization.Locator;
+import io.confluent.ksql.execution.streams.materialization.MaterializationException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -68,16 +68,18 @@ final class KsLocator implements Locator {
     final KeyQueryMetadata metadata = kafkaStreams
         .queryMetadataForKey(stateStoreName, key, keySerializer);
 
-    // FAil fast if Streams not ready. Let client handle it
+    // Fail fast if Streams not ready. Let client handle it
     if (metadata == KeyQueryMetadata.NOT_AVAILABLE) {
-      LOG.debug("Streams Metadata not available");
-      return Collections.emptyList();
+      LOG.debug("KeyQueryMetadata not available for state store {} and key {}",
+                stateStoreName, key);
+      throw new MaterializationException(String.format(
+          "KeyQueryMetadata not available for state store %s and key %s", stateStoreName, key));
     }
 
     final HostInfo activeHost = metadata.getActiveHost();
     final Set<HostInfo> standByHosts = metadata.getStandbyHosts();
 
-    LOG.debug("Before filtering: Active host {} , standby hosts {}", activeHost, standByHosts);
+    LOG.info("Before filtering: Active host {} , standby hosts {}", activeHost, standByHosts);
 
     final List<HostInfo> hosts = new ArrayList<>();
     hosts.add(activeHost);

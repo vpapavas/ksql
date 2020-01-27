@@ -21,46 +21,37 @@ import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.HostStatusEntity;
 import io.confluent.ksql.rest.server.TestKsqlRestApp;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 class HighAvailabilityTestUtil {
 
-  static void waitForClusterToBeDiscovered(final int numServers, final TestKsqlRestApp restApp) {
-    while (true) {
-      final ClusterStatusResponse clusterStatusResponse = sendClusterStatusRequest(restApp);
-      if(allServersDiscovered(numServers, clusterStatusResponse.getClusterStatus())) {
-        break;
+  static ClusterStatusResponse sendClusterStatusRequest(final TestKsqlRestApp restApp) {
+
+    try (final KsqlRestClient restClient = restApp.buildKsqlClient()) {
+
+      final RestResponse<ClusterStatusResponse> res = restClient.makeClusterStatusRequest();
+
+      if (res.isErroneous()) {
+        throw new AssertionError("Erroneous result: " + res.getErrorMessage());
       }
-      try {
-        Thread.sleep(200);
-      } catch (final Exception e) {
-        // Meh
-      }
+
+      return res.getResponse();
     }
   }
 
-  static boolean allServersDiscovered(
-      final int numServers,
-      final Map<HostInfoEntity, HostStatusEntity> clusterStatus) {
-
-    if(clusterStatus.size() < numServers) {
-      return false;
-    }
-    return true;
-  }
-
-  static void sendHeartbeartsEveryIntervalForWindowLength(
+  static void sendHeartbeartsForWindowLength(
       final TestKsqlRestApp receiverApp,
       final HostInfoEntity sender,
-      final long interval,
       final long window) {
     long start = System.currentTimeMillis();
     while (System.currentTimeMillis() - start < window) {
       sendHeartbeatRequest(receiverApp, sender, System.currentTimeMillis());
       try {
-        Thread.sleep(interval);
+        Thread.sleep(200);
       } catch (final Exception e) {
         // Meh
       }
@@ -82,6 +73,41 @@ class HighAvailabilityTestUtil {
       } catch (final Exception e) {
         // Meh
       }
+    }
+  }
+
+  static void waitForClusterToBeDiscovered(final int numServers, final TestKsqlRestApp restApp) {
+    while (true) {
+      final ClusterStatusResponse clusterStatusResponse = sendClusterStatusRequest(restApp);
+      if(allServersDiscovered(numServers, clusterStatusResponse.getClusterStatus())) {
+        break;
+      }
+      try {
+        Thread.sleep(200);
+      } catch (final Exception e) {
+        // Meh
+      }
+    }
+  }
+
+  static void waitForStreamsMetadataToInitialize(
+      final TestKsqlRestApp restApp, List<HostInfoEntity> hosts, String queryId) {
+
+    while (true) {
+      ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.sendClusterStatusRequest(restApp);
+      List<HostInfoEntity> initialized = hosts.stream().filter(
+          hostInfo -> clusterStatusResponse
+              .getClusterStatus()
+              .get(hostInfo)
+              .getPerQueryActiveStandbyEntity()
+              .get(queryId) != null).collect(Collectors.toList());
+      if(initialized.size() == hosts.size())
+        break;
+    }
+    try {
+      Thread.sleep(200);
+    } catch (final Exception e) {
+      // Meh
     }
   }
 
@@ -112,7 +138,14 @@ class HighAvailabilityTestUtil {
     return false;
   }
 
-  static void sendHeartbeatRequest(
+  private static boolean allServersDiscovered(
+      final int numServers,
+      final Map<HostInfoEntity, HostStatusEntity> clusterStatus) {
+
+    return clusterStatus.size() >= numServers;
+  }
+
+  private static void sendHeartbeatRequest(
       final TestKsqlRestApp restApp,
       final HostInfoEntity hostInfoEntity,
       final long timestamp) {
@@ -121,19 +154,4 @@ class HighAvailabilityTestUtil {
       restClient.makeAsyncHeartbeatRequest(hostInfoEntity, timestamp);
     }
   }
-
-  static ClusterStatusResponse sendClusterStatusRequest(final TestKsqlRestApp restApp) {
-
-    try (final KsqlRestClient restClient = restApp.buildKsqlClient()) {
-
-      final RestResponse<ClusterStatusResponse> res = restClient.makeClusterStatusRequest();
-
-      if (res.isErroneous()) {
-        throw new AssertionError("Erroneous result: " + res.getErrorMessage());
-      }
-
-      return res.getResponse();
-    }
-  }
-
 }

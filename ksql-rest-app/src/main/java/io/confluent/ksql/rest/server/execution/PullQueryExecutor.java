@@ -196,47 +196,48 @@ public final class PullQueryExecutor {
     }
   }
 
-  @VisibleForTesting
-  static TableRowsEntity handlePullQuery(
+  private static TableRowsEntity handlePullQuery(
       final ConfiguredStatement<Query> statement,
       final KsqlExecutionContext executionContext,
       final ServiceContext serviceContext,
       final PullQueryContext pullQueryContext,
       final List<IRoutingFilter> routingFilters
   ) {
-    // Get active and standby nodes for this key
-    final Locator locator = pullQueryContext.mat.locator();
-    final List<KsqlNode> filteredAndOrderedNodes = locator.locate(
-        pullQueryContext.rowKey, routingFilters);
+    try {
+      // Get active and standby nodes for this key
+      final Locator locator = pullQueryContext.mat.locator();
+      final List<KsqlNode> filteredAndOrderedNodes = locator.locate(
+          pullQueryContext.rowKey, routingFilters);
 
-    if (filteredAndOrderedNodes.isEmpty()) {
-      throw new MaterializationException(String.format(
-          "Unable to execute pull query : %s. Streams Metadata not initialized",
-          statement.getStatementText()));
-    }
+      if (filteredAndOrderedNodes.isEmpty()) {
+        throw new MaterializationException("All nodes are dead or exceed max allowed lag.");
+      }
 
-    if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS)) {
-      System.out.println("---------> Query standby enabled");
-      for (KsqlNode node : filteredAndOrderedNodes) {
-        try {
-          return routeQuery(node, statement, executionContext, serviceContext, pullQueryContext);
-        } catch (Throwable t) {
-          LOG.info("Error routing query {} to host {} ", statement.getStatementText(), node, t);
+      if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS)) {
+        // Nodes are ordered by preference: active is first if alive then standby nodes in
+        // increasing order of lag.
+        for (KsqlNode node : filteredAndOrderedNodes) {
+          try {
+            return routeQuery(node, statement, executionContext, serviceContext, pullQueryContext);
+          } catch (Throwable t) {
+            LOG.info("Error routing query {} to host {} ", statement.getStatementText(), node, t);
+          }
         }
       }
-    } else {
-      // Only active handles the query
+      // Only active handles the query.
       // Fail fast if active is dead: Let client handle retries.
       return routeQuery(
           filteredAndOrderedNodes.get(0), statement, executionContext, serviceContext,
           pullQueryContext);
+
+    } catch (Throwable t) {
+      throw new MaterializationException(String.format(
+          "Unable to execute pull query: %s. Error: %s", statement.getStatementText(),
+          t.getMessage()), t);
     }
-    throw new MaterializationException(
-        "Unable to execute pull query :" + statement.getStatementText());
   }
 
-  @VisibleForTesting
-  static TableRowsEntity routeQuery(
+  private static TableRowsEntity routeQuery(
       final KsqlNode node,
       final ConfiguredStatement<Query> statement,
       final KsqlExecutionContext executionContext,
@@ -244,7 +245,6 @@ public final class PullQueryExecutor {
       final PullQueryContext pullQueryContext
   ) {
     try {
-      System.out.println("---------> Route Query to host " + node);
       if (node.isLocal()) {
         LOG.info("Query {} executed locally at host {}.",
                  statement.getStatementText(), node.location());

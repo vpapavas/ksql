@@ -43,7 +43,6 @@ import io.confluent.ksql.rest.server.computation.CommandRunner;
 import io.confluent.ksql.rest.server.computation.CommandStore;
 import io.confluent.ksql.rest.server.context.KsqlSecurityContextBinder;
 import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
-import io.confluent.ksql.rest.server.resources.ActiveStandbyResource;
 import io.confluent.ksql.rest.server.resources.KsqlResource;
 import io.confluent.ksql.rest.server.resources.RootDocument;
 import io.confluent.ksql.rest.server.resources.StatusResource;
@@ -129,8 +128,6 @@ public class KsqlRestApplicationTest {
   private Consumer<KsqlConfig> rocksDBConfigSetterHandler;
   @Mock
   private HeartbeatAgent heartbeatAgent;
-  @Mock
-  private ActiveStandbyResource activeStandbyResource;
 
   @Mock
   private SchemaRegistryClient schemaRegistryClient;
@@ -437,8 +434,7 @@ public class KsqlRestApplicationTest {
         ImmutableList.of(precondition1, precondition2),
         ImmutableList.of(ksqlResource, streamedQueryResource),
         rocksDBConfigSetterHandler,
-        Optional.of(heartbeatAgent),
-        activeStandbyResource
+        Optional.of(heartbeatAgent)
     );
   }
 }

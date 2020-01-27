@@ -53,7 +53,6 @@ import io.confluent.ksql.rest.server.computation.CommandStore;
 import io.confluent.ksql.rest.server.computation.InteractiveStatementExecutor;
 import io.confluent.ksql.rest.server.context.KsqlSecurityContextBinder;
 import io.confluent.ksql.rest.server.filters.KsqlAuthorizationFilter;
-import io.confluent.ksql.rest.server.resources.ActiveStandbyResource;
 import io.confluent.ksql.rest.server.resources.ClusterStatusResource;
 import io.confluent.ksql.rest.server.resources.HealthCheckResource;
 import io.confluent.ksql.rest.server.resources.HeartbeatResource;
@@ -161,7 +160,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
   private final List<KsqlConfigurable> configurables;
   private final Consumer<KsqlConfig> rocksDBConfigSetterHandler;
   private final Optional<HeartbeatAgent> heartbeatAgent;
-  private final ActiveStandbyResource activeStandbyResource;
 
   // Cannot be set in constructor, depends on parent server start
   private KsqlConfig ksqlConfigWithPort;
@@ -193,8 +191,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
       final List<KsqlServerPrecondition> preconditions,
       final List<KsqlConfigurable> configurables,
       final Consumer<KsqlConfig> rocksDBConfigSetterHandler,
-      final Optional<HeartbeatAgent> heartbeatAgent,
-      final ActiveStandbyResource activeStandbyResource
+      final Optional<HeartbeatAgent> heartbeatAgent
   ) {
     super(restConfig);
 
@@ -219,7 +216,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     this.rocksDBConfigSetterHandler =
         requireNonNull(rocksDBConfigSetterHandler, "rocksDBConfigSetterHandler");
     this.heartbeatAgent = requireNonNull(heartbeatAgent, "heartbeatAgent");
-    this.activeStandbyResource = requireNonNull(activeStandbyResource, "activeStandbyResource");
   }
 
   @Override
@@ -235,7 +231,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
       config.register(new HeartbeatResource(heartbeatAgent.get()));
       config.register(new ClusterStatusResource(ksqlEngine, heartbeatAgent.get()));
     }
-    config.register(activeStandbyResource);
     config.register(new KsqlExceptionMapper());
     config.register(new ServerStateDynamicBinding(serverState));
   }
@@ -258,8 +253,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
           .getKsqlStreamConfigProps().get(StreamsConfig.APPLICATION_SERVER_CONFIG));
       heartbeatAgent.get().startAgent();
     }
-    activeStandbyResource.setLocalHostInfo((String)ksqlConfigWithPort
-        .getKsqlStreamConfigProps().get(StreamsConfig.APPLICATION_SERVER_CONFIG));
     displayWelcomeMessage();
   }
 
@@ -618,8 +611,6 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         errorHandler
     );
 
-    final ActiveStandbyResource activeStandbyResource = new ActiveStandbyResource(ksqlEngine);
-
     final List<String> managedTopics = new LinkedList<>();
     managedTopics.add(commandTopicName);
     if (processingLogConfig.getBoolean(ProcessingLogConfig.TOPIC_AUTO_CREATE)) {
@@ -671,8 +662,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
         preconditions,
         configurables,
         rocksDBConfigSetterHandler,
-        heartbeatAgent,
-        activeStandbyResource
+        heartbeatAgent
     );
   }
 

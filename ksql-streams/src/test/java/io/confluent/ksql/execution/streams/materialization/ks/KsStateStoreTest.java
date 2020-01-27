@@ -19,6 +19,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -142,7 +144,7 @@ public class KsStateStoreTest {
         .thenReturn(State.RUNNING)
         .thenReturn(State.NOT_RUNNING);
 
-    when(kafkaStreams.store(any(), any())).thenThrow(new IllegalStateException());
+    when(kafkaStreams.store(any(), any(), anyBoolean())).thenThrow(new IllegalStateException());
 
     // When:
     expectedException.expect(NotRunningException.class);
@@ -163,7 +165,7 @@ public class KsStateStoreTest {
     // Then:
     final InOrder inOrder = Mockito.inOrder(kafkaStreams);
     inOrder.verify(kafkaStreams, atLeast(1)).state();
-    inOrder.verify(kafkaStreams).store(any(), any());
+    inOrder.verify(kafkaStreams).store(any(), any(), anyBoolean());
   }
 
   @Test
@@ -176,13 +178,13 @@ public class KsStateStoreTest {
     store.store(storeType);
 
     // Then:
-    verify(kafkaStreams).store(STORE_NAME, storeType);
+    verify(kafkaStreams).store(eq(STORE_NAME), eq(storeType), anyBoolean());
   }
 
   @Test
   public void shouldThrowIfStoreNotAvailableWhenRequested() {
     // Given:
-    when(kafkaStreams.store(any(), any())).thenThrow(new InvalidStateStoreException("boom"));
+    when(kafkaStreams.store(any(), any(), anyBoolean())).thenThrow(new InvalidStateStoreException("boom"));
 
     // Then:
     expectedException.expect(MaterializationException.class);
@@ -197,7 +199,7 @@ public class KsStateStoreTest {
   public void shouldReturnSessionStore() {
     // Given:
     final ReadOnlySessionStore<?, ?> sessionStore = mock(ReadOnlySessionStore.class);
-    when(kafkaStreams.store(any(), any())).thenReturn(sessionStore);
+    when(kafkaStreams.store(any(), any(), anyBoolean())).thenReturn(sessionStore);
 
     // When:
     final ReadOnlySessionStore<Double, String> result = store
@@ -211,7 +213,7 @@ public class KsStateStoreTest {
   public void shouldReturnWindowStore() {
     // Given:
     final ReadOnlyWindowStore<?, ?> windowStore = mock(ReadOnlyWindowStore.class);
-    when(kafkaStreams.store(any(), any())).thenReturn(windowStore);
+    when(kafkaStreams.store(any(), any(), anyBoolean())).thenReturn(windowStore);
 
     // When:
     final ReadOnlyWindowStore<Boolean, String> result = store
