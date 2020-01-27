@@ -102,7 +102,7 @@ public class HeartbeatAgentFunctionalTest {
   @Test(timeout = 60000)
   public void shouldMarkServersAsUp() {
     // Given:
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(2, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 2);
     HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
         REST_APP_0, host1, HighAvailabilityTestUtil::remoteServerIsDown);
 
@@ -119,7 +119,7 @@ public class HeartbeatAgentFunctionalTest {
   @Test(timeout = 60000)
   public void shouldMarkRemoteServerAsDown() {
     // Given:
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(2, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 2);
 
     // When:
     ClusterStatusResponse clusterStatusResponse = HighAvailabilityTestUtil.waitForRemoteServerToChangeStatus(
@@ -133,7 +133,7 @@ public class HeartbeatAgentFunctionalTest {
   @Test(timeout = 60000)
   public void shouldMarkRemoteServerAsUpThenDownThenUp() {
     // Given:
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(2, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 2);
     HighAvailabilityTestUtil.sendHeartbeartsForWindowLength(REST_APP_0, host1, 3000);
 
     // When:

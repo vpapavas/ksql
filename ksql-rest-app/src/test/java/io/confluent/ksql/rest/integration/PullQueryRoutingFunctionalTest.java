@@ -205,7 +205,7 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 3);
     HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
         REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
@@ -234,7 +234,7 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 3);
     HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
         REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
@@ -265,7 +265,7 @@ public class PullQueryRoutingFunctionalTest {
             + " GROUP BY " + USER_PROVIDER.key() + ";"
     );
     waitForTableRows();
-    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(3, REST_APP_0);
+    HighAvailabilityTestUtil.waitForClusterToBeDiscovered(REST_APP_0, 3);
     HighAvailabilityTestUtil.waitForStreamsMetadataToInitialize(
         REST_APP_0, ImmutableList.of(host0, host1, host2), QUERY_ID);
     ClusterFormation clusterFormation = findClusterFormation();
