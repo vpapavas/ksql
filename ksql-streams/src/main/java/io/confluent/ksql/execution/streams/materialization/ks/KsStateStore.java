@@ -71,12 +71,12 @@ class KsStateStore {
     awaitRunning();
 
     try {
-      if (ksqlConfig.getBoolean(KsqlConfig.KSQL_PULL_QUERIES_ENABLE_CONFIG)) {
-        // True flag allows queries on standby and replica state stores
-        return kafkaStreams.store(stateStoreName, queryableStoreType, true);
-      }
+      // True flag allows queries on standby and replica state stores
       // False flag allows queries only on active state store
-      return kafkaStreams.store(stateStoreName, queryableStoreType, false);
+      return kafkaStreams.store(
+          stateStoreName,
+          queryableStoreType,
+          ksqlConfig.getBoolean(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS));
     } catch (final Exception e) {
       final State state = kafkaStreams.state();
       if (state != State.RUNNING) {

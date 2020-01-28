@@ -109,7 +109,7 @@ public class PullQueryRoutingFunctionalTest {
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_SEND_INTERVAL_MS_CONFIG, 600000)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_CHECK_INTERVAL_MS_CONFIG, 200)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_DISCOVER_CLUSTER_MS_CONFIG, 2000)
-      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS, true)
+      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS, true)
       .withProperty(KsqlConfig.KSQL_STREAMS_PREFIX + "num.standby.replicas", 1)
       .build();
 
@@ -123,7 +123,7 @@ public class PullQueryRoutingFunctionalTest {
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_SEND_INTERVAL_MS_CONFIG, 600000)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_CHECK_INTERVAL_MS_CONFIG, 200)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_DISCOVER_CLUSTER_MS_CONFIG, 2000)
-      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS, true)
+      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS, true)
       .withProperty(KsqlConfig.KSQL_STREAMS_PREFIX + "num.standby.replicas", 1)
       .build();
 
@@ -137,7 +137,7 @@ public class PullQueryRoutingFunctionalTest {
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_SEND_INTERVAL_MS_CONFIG, 600000)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_CHECK_INTERVAL_MS_CONFIG, 200)
       .withProperty(KsqlRestConfig.KSQL_HEARTBEAT_DISCOVER_CLUSTER_MS_CONFIG, 2000)
-      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS, true)
+      .withProperty(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS, true)
       .withProperty(KsqlConfig.KSQL_STREAMS_PREFIX + "num.standby.replicas", 1)
       .build();
 

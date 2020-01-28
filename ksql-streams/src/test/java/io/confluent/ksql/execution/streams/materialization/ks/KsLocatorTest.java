@@ -29,7 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.NullPointerTester;
 import com.google.common.testing.NullPointerTester.Visibility;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.execution.streams.materialization.Locator.KsqlNode;
 import io.confluent.ksql.execution.streams.materialization.MaterializationException;
 import io.confluent.ksql.rest.entity.HostStatusEntity;
@@ -68,7 +68,7 @@ public class KsLocatorTest {
   @Mock
   private Serializer<Struct> keySerializer;
   @Mock
-  private IRoutingFilter livenessFilter;
+  private RoutingFilter livenessFilter;
   @Mock
   private HostInfo activeHostInfo;
   @Mock
@@ -82,7 +82,7 @@ public class KsLocatorTest {
   private KsqlNode standByNode2;
 
   private Map<HostInfo, HostStatusEntity> hostsStatus;
-  private List<IRoutingFilter> routingFilters;
+  private List<RoutingFilter> routingFilters;
 
   @Rule
   public final ExpectedException expectedException = ExpectedException.none();

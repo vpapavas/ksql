@@ -46,7 +46,7 @@ import io.confluent.ksql.execution.expression.tree.StringLiteral;
 import io.confluent.ksql.execution.expression.tree.UnqualifiedColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.VisitParentExpressionVisitor;
 import io.confluent.ksql.execution.plan.SelectExpression;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.execution.streams.materialization.Locator;
 import io.confluent.ksql.execution.streams.materialization.Locator.KsqlNode;
 import io.confluent.ksql.execution.streams.materialization.Materialization;
@@ -136,7 +136,7 @@ public final class PullQueryExecutor {
       final ConfiguredStatement<Query> statement,
       final KsqlExecutionContext executionContext,
       final ServiceContext serviceContext,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     if (!statement.getStatement().isPullQuery()) {
       throw new IllegalArgumentException("Executor can only handle pull queries");
@@ -201,7 +201,7 @@ public final class PullQueryExecutor {
       final KsqlExecutionContext executionContext,
       final ServiceContext serviceContext,
       final PullQueryContext pullQueryContext,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     try {
       // Get active and standby nodes for this key
@@ -213,7 +213,7 @@ public final class PullQueryExecutor {
         throw new MaterializationException("All nodes are dead or exceed max allowed lag.");
       }
 
-      if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ALLOW_STALE_READS)) {
+      if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS)) {
         // Nodes are ordered by preference: active is first if alive then standby nodes in
         // increasing order of lag.
         for (KsqlNode node : filteredAndOrderedNodes) {

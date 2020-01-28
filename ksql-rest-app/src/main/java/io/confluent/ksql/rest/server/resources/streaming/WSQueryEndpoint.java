@@ -20,7 +20,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.engine.KsqlEngine;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
 import io.confluent.ksql.parser.tree.PrintTopic;
 import io.confluent.ksql.parser.tree.Query;
@@ -101,7 +101,7 @@ public class WSQueryEndpoint {
   private final ServerState serverState;
   private final Errors errorHandler;
   private final Supplier<SchemaRegistryClient> schemaRegistryClientFactory;
-  private final List<IRoutingFilter> routingFilters;
+  private final List<RoutingFilter> routingFilters;
 
   private WebSocketSubscriber<?> subscriber;
   private KsqlSecurityContext securityContext;
@@ -122,7 +122,7 @@ public class WSQueryEndpoint {
       final KsqlSecurityExtension securityExtension,
       final ServerState serverState,
       final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     this(ksqlConfig,
         mapper,
@@ -167,7 +167,7 @@ public class WSQueryEndpoint {
       final DefaultServiceContextFactory defaultServiceContextFactory,
       final ServerState serverState,
       final Supplier<SchemaRegistryClient> schemaRegistryClientFactory,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     this.ksqlConfig = Objects.requireNonNull(ksqlConfig, "ksqlConfig");
     this.mapper = Objects.requireNonNull(mapper, "mapper");
@@ -468,7 +468,7 @@ public class WSQueryEndpoint {
       final ListeningScheduledExecutorService ignored,
       final ConfiguredStatement<Query> query,
       final WebSocketSubscriber<StreamedRow> streamSubscriber,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
 
   ) {
     new PullQueryPublisher(ksqlEngine, serviceContext, query, routingFilters)
@@ -505,7 +505,7 @@ public class WSQueryEndpoint {
         ListeningScheduledExecutorService exec,
         ConfiguredStatement<Query> query,
         WebSocketSubscriber<StreamedRow> subscriber,
-        List<IRoutingFilter> routingFilters);
+        List<RoutingFilter> routingFilters);
 
   }
 

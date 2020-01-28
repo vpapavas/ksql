@@ -22,7 +22,7 @@ import com.google.common.base.Preconditions;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.KsqlExecutionContext;
 import io.confluent.ksql.engine.KsqlEngine;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.rest.entity.TableRowsEntity;
@@ -41,13 +41,13 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
   private final ServiceContext serviceContext;
   private final ConfiguredStatement<Query> query;
   private final TheQueryExecutor pullQueryExecutor;
-  private final List<IRoutingFilter> routingFilters;
+  private final List<RoutingFilter> routingFilters;
 
   PullQueryPublisher(
       final KsqlEngine ksqlEngine,
       final ServiceContext serviceContext,
       final ConfiguredStatement<Query> query,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     this(ksqlEngine, serviceContext, query, routingFilters, PullQueryExecutor::execute);
   }
@@ -57,7 +57,7 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
       final KsqlEngine ksqlEngine,
       final ServiceContext serviceContext,
       final ConfiguredStatement<Query> query,
-      final List<IRoutingFilter> routingFilters,
+      final List<RoutingFilter> routingFilters,
       final TheQueryExecutor pullQueryExecutor
   ) {
     this.ksqlEngine = requireNonNull(ksqlEngine, "ksqlEngine");
@@ -134,7 +134,7 @@ class PullQueryPublisher implements Flow.Publisher<Collection<StreamedRow>> {
         ConfiguredStatement<Query> statement,
         KsqlExecutionContext executionContext,
         ServiceContext serviceContext,
-        List<IRoutingFilter> routingFilters
+        List<RoutingFilter> routingFilters
     );
   }
 }

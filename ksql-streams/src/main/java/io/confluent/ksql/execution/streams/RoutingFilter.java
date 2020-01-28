@@ -17,7 +17,12 @@ package io.confluent.ksql.execution.streams;
 
 import org.apache.kafka.streams.state.HostInfo;
 
-public interface IRoutingFilter {
+/**
+ * Used to filter ksql hosts based on criteria specified in implementing classes.
+ * One such example is a filter that checks whether hosts are alive or dead as determined
+ * by the heartbeat agent.
+ */
+public interface RoutingFilter {
 
   boolean filter(HostInfo hostInfo, String storeName, int partition);
 

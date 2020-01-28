@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.engine.KsqlEngine;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.json.JsonMapper;
 import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
 import io.confluent.ksql.parser.tree.PrintTopic;
@@ -82,7 +82,7 @@ public class StreamedQueryResource implements KsqlConfigurable {
   private final Optional<KsqlAuthorizationValidator> authorizationValidator;
   private final Errors errorHandler;
   private KsqlConfig ksqlConfig;
-  private final List<IRoutingFilter> routingFilters;
+  private final List<RoutingFilter> routingFilters;
 
   public StreamedQueryResource(
       final KsqlEngine ksqlEngine,
@@ -92,7 +92,7 @@ public class StreamedQueryResource implements KsqlConfigurable {
       final ActivenessRegistrar activenessRegistrar,
       final Optional<KsqlAuthorizationValidator> authorizationValidator,
       final Errors errorHandler,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     this(
         ksqlEngine,
@@ -119,7 +119,7 @@ public class StreamedQueryResource implements KsqlConfigurable {
       final ActivenessRegistrar activenessRegistrar,
       final Optional<KsqlAuthorizationValidator> authorizationValidator,
       final Errors errorHandler,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     this.ksqlEngine = Objects.requireNonNull(ksqlEngine, "ksqlEngine");
     this.statementParser = Objects.requireNonNull(statementParser, "statementParser");

@@ -30,7 +30,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.ksql.ServiceInfo;
 import io.confluent.ksql.engine.KsqlEngine;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.function.InternalFunctionRegistry;
 import io.confluent.ksql.function.MutableFunctionRegistry;
 import io.confluent.ksql.function.UserFunctionLoader;
@@ -454,7 +454,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
           ErrorMessages.class
       ));
 
-      final List<IRoutingFilter> routingFilters = ImmutableList.of(
+      final List<RoutingFilter> routingFilters = ImmutableList.of(
           new LivenessFilter(heartbeatAgent));
 
       container.addEndpoint(
@@ -587,7 +587,7 @@ public final class KsqlRestApplication extends ExecutableApplication<KsqlRestCon
     final Optional<HeartbeatAgent> heartbeatAgent =
         initializeHeartbeatAgent(restConfig, ksqlEngine, serviceContext);
 
-    final List<IRoutingFilter> routingFilters = ImmutableList.of(
+    final List<RoutingFilter> routingFilters = ImmutableList.of(
         new LivenessFilter(heartbeatAgent));
 
     final StreamedQueryResource streamedQueryResource = new StreamedQueryResource(
