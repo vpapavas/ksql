@@ -151,6 +151,7 @@ public class KsqlRestConfig extends RestConfig {
   private static final String KSQL_HEARTBEAT_THREAD_POOL_SIZE_CONFIG_DOC =
       "Size of thread pool used for sending / processing heartbeats and cluster discovery.";
 
+
   private static final ConfigDef CONFIG_DEF;
 
   static {

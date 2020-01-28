@@ -177,7 +177,8 @@ public class StreamedQueryResourceTest {
         COMMAND_QUEUE_CATCHUP_TIMOEUT,
         activenessRegistrar,
         Optional.of(authorizationValidator),
-        errorsHandler
+        errorsHandler,
+        Collections.emptyList()
     );
 
     testResource.configure(VALID_CONFIG);
@@ -203,7 +204,8 @@ public class StreamedQueryResourceTest {
         COMMAND_QUEUE_CATCHUP_TIMOEUT,
         activenessRegistrar,
         Optional.of(authorizationValidator),
-        errorsHandler
+        errorsHandler,
+        Collections.emptyList()
     );
 
     // Then:

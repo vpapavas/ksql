@@ -15,6 +15,7 @@
 
 package io.confluent.ksql.rest.server.execution;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -45,10 +46,11 @@ import io.confluent.ksql.execution.expression.tree.StringLiteral;
 import io.confluent.ksql.execution.expression.tree.UnqualifiedColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.VisitParentExpressionVisitor;
 import io.confluent.ksql.execution.plan.SelectExpression;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.execution.streams.materialization.Locator;
 import io.confluent.ksql.execution.streams.materialization.Locator.KsqlNode;
 import io.confluent.ksql.execution.streams.materialization.Materialization;
-import io.confluent.ksql.execution.streams.materialization.MaterializationTimeOutException;
+import io.confluent.ksql.execution.streams.materialization.MaterializationException;
 import io.confluent.ksql.execution.streams.materialization.PullProcessingContext;
 import io.confluent.ksql.execution.streams.materialization.TableRow;
 import io.confluent.ksql.execution.transform.KsqlTransformer;
@@ -66,7 +68,6 @@ import io.confluent.ksql.parser.tree.SelectItem;
 import io.confluent.ksql.query.QueryId;
 import io.confluent.ksql.rest.Errors;
 import io.confluent.ksql.rest.client.RestResponse;
-import io.confluent.ksql.rest.entity.KsqlEntity;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.rest.entity.StreamedRow.Header;
 import io.confluent.ksql.rest.entity.TableRowsEntity;
@@ -99,10 +100,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.kafka.connect.data.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // CHECKSTYLE_RULES.OFF: ClassDataAbstractionCoupling
 public final class PullQueryExecutor {
   // CHECKSTYLE_RULES.ON: ClassDataAbstractionCoupling
+
+  private static final Logger LOG = LoggerFactory.getLogger(PullQueryExecutor.class);
 
   private static final Set<Type> VALID_WINDOW_BOUNDS_TYPES = ImmutableSet.of(
       Type.EQUAL,
@@ -127,19 +132,11 @@ public final class PullQueryExecutor {
     throw new KsqlRestException(Errors.queryEndpoint(statement.getStatementText()));
   }
 
-  public static Optional<KsqlEntity> execute(
-      final ConfiguredStatement<Query> statement,
-      final Map<String, ?> sessionProperties,
-      final KsqlExecutionContext executionContext,
-      final ServiceContext serviceContext
-  ) {
-    return Optional.of(execute(statement, executionContext, serviceContext));
-  }
-
   public static TableRowsEntity execute(
       final ConfiguredStatement<Query> statement,
       final KsqlExecutionContext executionContext,
-      final ServiceContext serviceContext
+      final ServiceContext serviceContext,
+      final List<RoutingFilter> routingFilters
   ) {
     if (!statement.getStatement().isPullQuery()) {
       throw new IllegalArgumentException("Executor can only handle pull queries");
@@ -165,6 +162,7 @@ public final class PullQueryExecutor {
       final WhereInfo whereInfo = extractWhereInfo(analysis, query);
 
       final QueryId queryId = uniqueQueryId();
+
       final QueryContext.Stacker contextStacker = new Stacker();
 
       final Materialization mat = query
@@ -173,54 +171,22 @@ public final class PullQueryExecutor {
 
       final Struct rowKey = asKeyStruct(whereInfo.rowkey, query.getPhysicalSchema());
 
-      final KsqlConfig ksqlConfig = statement.getConfig();
-      final KsqlNode owner = getOwner(ksqlConfig, rowKey, mat);
-      if (!owner.isLocal()) {
-        return proxyTo(owner, statement, serviceContext);
-      }
-
-      final Result result;
-      if (whereInfo.windowStartBounds.isPresent()) {
-        final Range<Instant> windowStart = whereInfo.windowStartBounds.get();
-
-        final List<? extends TableRow> rows = mat.windowed()
-            .get(rowKey, windowStart);
-
-        result = new Result(mat.schema(), rows);
-      } else {
-        final List<? extends TableRow> rows = mat.nonWindowed()
-            .get(rowKey)
-            .map(ImmutableList::of)
-            .orElse(ImmutableList.of());
-
-        result = new Result(mat.schema(), rows);
-      }
-
-      final LogicalSchema outputSchema;
-      final List<List<?>> rows;
-      if (isSelectStar(statement.getStatement().getSelect())) {
-        outputSchema = TableRowsEntityFactory.buildSchema(result.schema, mat.windowType());
-        rows = TableRowsEntityFactory.createRows(result.rows);
-      } else {
-        outputSchema = selectOutputSchema(result, executionContext, analysis);
-
-        rows = handleSelects(
-            result,
-            statement,
-            executionContext,
-            analysis,
-            outputSchema,
-            queryId,
-            contextStacker
-        );
-      }
-
-      return new TableRowsEntity(
-          statement.getStatementText(),
+      final PullQueryContext pullQueryContext = new PullQueryContext(
+          rowKey,
+          mat,
+          analysis,
+          whereInfo,
           queryId,
-          outputSchema,
-          rows
+          contextStacker);
+
+      return handlePullQuery(
+          statement,
+          executionContext,
+          serviceContext,
+          pullQueryContext,
+          routingFilters
       );
+
     } catch (final Exception e) {
       throw new KsqlStatementException(
           e.getMessage() == null ? "Server Error" : e.getMessage(),
@@ -228,6 +194,122 @@ public final class PullQueryExecutor {
           e
       );
     }
+  }
+
+  private static TableRowsEntity handlePullQuery(
+      final ConfiguredStatement<Query> statement,
+      final KsqlExecutionContext executionContext,
+      final ServiceContext serviceContext,
+      final PullQueryContext pullQueryContext,
+      final List<RoutingFilter> routingFilters
+  ) {
+    try {
+      // Get active and standby nodes for this key
+      final Locator locator = pullQueryContext.mat.locator();
+      final List<KsqlNode> filteredAndOrderedNodes = locator.locate(
+          pullQueryContext.rowKey, routingFilters);
+
+      if (filteredAndOrderedNodes.isEmpty()) {
+        throw new MaterializationException("All nodes are dead or exceed max allowed lag.");
+      }
+
+      if (statement.getConfig().getBoolean(KsqlConfig.KSQL_QUERY_PULL_ENABLE_STALE_READS)) {
+        // Nodes are ordered by preference: active is first if alive then standby nodes in
+        // increasing order of lag.
+        for (KsqlNode node : filteredAndOrderedNodes) {
+          try {
+            return routeQuery(node, statement, executionContext, serviceContext, pullQueryContext);
+          } catch (Throwable t) {
+            LOG.info("Error routing query {} to host {} ", statement.getStatementText(), node, t);
+          }
+        }
+      }
+      // Only active handles the query.
+      // Fail fast if active is dead: Let client handle retries.
+      return routeQuery(
+          filteredAndOrderedNodes.get(0), statement, executionContext, serviceContext,
+          pullQueryContext);
+
+    } catch (Throwable t) {
+      throw new MaterializationException(String.format(
+          "Unable to execute pull query: %s. Error: %s", statement.getStatementText(),
+          t.getMessage()), t);
+    }
+  }
+
+  private static TableRowsEntity routeQuery(
+      final KsqlNode node,
+      final ConfiguredStatement<Query> statement,
+      final KsqlExecutionContext executionContext,
+      final ServiceContext serviceContext,
+      final PullQueryContext pullQueryContext
+  ) {
+    try {
+      if (node.isLocal()) {
+        LOG.info("Query {} executed locally at host {}.",
+                 statement.getStatementText(), node.location());
+        return queryRowsLocally(
+            statement,
+            executionContext,
+            pullQueryContext);
+      } else {
+        LOG.info("Query {} routed to host {}.", statement.getStatementText(), node.location());
+        return forwardTo(node, statement, serviceContext);
+      }
+    } catch (Throwable t) {
+      LOG.info("Error routing query " + statement.getStatementText() + " to " + node, t);
+    }
+    throw new MaterializationException(
+        "Unable to execute pull query :" + statement.getStatementText());
+  }
+
+  @VisibleForTesting
+  static TableRowsEntity queryRowsLocally(
+      final ConfiguredStatement<Query> statement,
+      final KsqlExecutionContext executionContext,
+      final PullQueryContext pullQueryContext
+  ) {
+    final Result result;
+    if (pullQueryContext.whereInfo.windowStartBounds.isPresent()) {
+      final Range<Instant> windowStart = pullQueryContext.whereInfo.windowStartBounds.get();
+
+      final List<? extends TableRow> rows = pullQueryContext.mat.windowed()
+          .get(pullQueryContext.rowKey, windowStart);
+
+      result = new Result(pullQueryContext.mat.schema(), rows);
+    } else {
+      final List<? extends TableRow> rows = pullQueryContext.mat.nonWindowed()
+          .get(pullQueryContext.rowKey)
+          .map(ImmutableList::of)
+          .orElse(ImmutableList.of());
+
+      result = new Result(pullQueryContext.mat.schema(), rows);
+    }
+
+    final LogicalSchema outputSchema;
+    final List<List<?>> rows;
+    if (isSelectStar(statement.getStatement().getSelect())) {
+      outputSchema = TableRowsEntityFactory.buildSchema(
+          result.schema, pullQueryContext.mat.windowType());
+      rows = TableRowsEntityFactory.createRows(result.rows);
+    } else {
+      outputSchema = selectOutputSchema(result, executionContext, pullQueryContext.analysis);
+      rows = handleSelects(
+          result,
+          statement,
+          executionContext,
+          pullQueryContext.analysis,
+          outputSchema,
+          pullQueryContext.queryId,
+          pullQueryContext.contextStacker
+      );
+    }
+    return new TableRowsEntity(
+        statement.getStatementText(),
+        pullQueryContext.queryId,
+        outputSchema,
+        rows
+    );
   }
 
   private static QueryId uniqueQueryId() {
@@ -245,6 +327,55 @@ public final class PullQueryExecutor {
     );
 
     return queryAnalyzer.analyze(statement.getStatement(), Optional.empty());
+  }
+
+  private static final class PullQueryContext {
+    private final Struct rowKey;
+    private final Materialization mat;
+    private final ImmutableAnalysis analysis;
+    private final WhereInfo whereInfo;
+    private final QueryId queryId;
+    private final QueryContext.Stacker contextStacker;
+
+    private PullQueryContext(
+        final Struct rowKey,
+        final Materialization mat,
+        final ImmutableAnalysis analysis,
+        final WhereInfo whereInfo,
+        final QueryId queryId,
+        final QueryContext.Stacker contextStacker
+    ) {
+      this.rowKey = Objects.requireNonNull(rowKey, "rowkey");
+      this.mat = Objects.requireNonNull(mat, "materialization");
+      this.analysis = Objects.requireNonNull(analysis, "analysis");
+      this.whereInfo = Objects.requireNonNull(whereInfo, "whereInfo");
+      this.queryId = Objects.requireNonNull(queryId, "queryId");
+      this.contextStacker = Objects.requireNonNull(contextStacker, "contextStacker");
+    }
+
+    public Struct getRowKey() {
+      return rowKey;
+    }
+
+    public Materialization getMat() {
+      return mat;
+    }
+
+    public ImmutableAnalysis getAnalysis() {
+      return analysis;
+    }
+
+    public WhereInfo getWhereInfo() {
+      return whereInfo;
+    }
+
+    public QueryId getQueryId() {
+      return queryId;
+    }
+
+    public QueryContext.Stacker getContextStacker() {
+      return contextStacker;
+    }
   }
 
   private static final class WhereInfo {
@@ -700,30 +831,8 @@ public final class PullQueryExecutor {
     return source.getName();
   }
 
-  private static KsqlNode getOwner(
-      final KsqlConfig ksqlConfig,
-      final Struct rowKey,
-      final Materialization mat
-  ) {
-    final Locator locator = mat.locator();
-
-    final long timeoutMs =
-        ksqlConfig.getLong(KsqlConfig.KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_CONFIG);
-    final long threshold = System.currentTimeMillis() + timeoutMs;
-    while (System.currentTimeMillis() < threshold) {
-      final Optional<KsqlNode> owner = locator.locate(rowKey);
-      if (owner.isPresent()) {
-        return owner.get();
-      }
-    }
-
-    throw new MaterializationTimeOutException(
-        "The owner of the key could not be determined within the configured timeout: "
-            + timeoutMs + "ms, config: " + KsqlConfig.KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_CONFIG
-    );
-  }
-
-  private static TableRowsEntity proxyTo(
+  @VisibleForTesting
+  static TableRowsEntity forwardTo(
       final KsqlNode owner,
       final ConfiguredStatement<Query> statement,
       final ServiceContext serviceContext

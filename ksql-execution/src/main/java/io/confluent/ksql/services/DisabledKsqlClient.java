@@ -16,6 +16,7 @@
 package io.confluent.ksql.services;
 
 import io.confluent.ksql.rest.client.RestResponse;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
 import io.confluent.ksql.rest.entity.StreamedRow;
@@ -59,6 +60,11 @@ public final class DisabledKsqlClient implements SimpleKsqlClient {
 
   @Override
   public RestResponse<ClusterStatusResponse> makeClusterStatusRequest(final URI serverEndPoint) {
+    throw new UnsupportedOperationException("KSQL client is disabled");
+  }
+
+  @Override
+  public RestResponse<ActiveStandbyResponse> makeActiveStandbyRequest(final URI serverEndPoint) {
     throw new UnsupportedOperationException("KSQL client is disabled");
   }
 }

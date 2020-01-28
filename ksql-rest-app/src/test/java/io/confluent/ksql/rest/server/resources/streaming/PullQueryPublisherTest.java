@@ -36,6 +36,7 @@ import io.confluent.ksql.schema.ksql.types.SqlTypes;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.statement.ConfiguredStatement;
 import java.util.Collection;
+import java.util.Collections;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,9 +76,10 @@ public class PullQueryPublisherTest {
 
   @Before
   public void setUp() {
-    publisher = new PullQueryPublisher(engine, serviceContext, statement, pullQueryExecutor);
+    publisher = new PullQueryPublisher(engine, serviceContext, statement,
+                                       Collections.emptyList(), pullQueryExecutor);
 
-    when(pullQueryExecutor.execute(any(), any(), any())).thenReturn(entity);
+    when(pullQueryExecutor.execute(any(), any(), any(), any())).thenReturn(entity);
 
     when(entity.getSchema()).thenReturn(SCHEMA);
 
@@ -102,7 +104,7 @@ public class PullQueryPublisherTest {
     subscription.request(1);
 
     // Then:
-    verify(pullQueryExecutor).execute(statement, engine, serviceContext);
+    verify(pullQueryExecutor).execute(statement, engine, serviceContext, Collections.emptyList());
   }
 
   @Test
@@ -115,7 +117,7 @@ public class PullQueryPublisherTest {
 
     // Then:
     verify(subscriber).onNext(any());
-    verify(pullQueryExecutor).execute(statement, engine, serviceContext);
+    verify(pullQueryExecutor).execute(statement, engine, serviceContext, Collections.emptyList());
   }
 
   @Test
@@ -151,7 +153,7 @@ public class PullQueryPublisherTest {
     givenSubscribed();
 
     final Throwable e = new RuntimeException("Boom!");
-    when(pullQueryExecutor.execute(any(), any(), any())).thenThrow(e);
+    when(pullQueryExecutor.execute(any(), any(), any(), any())).thenThrow(e);
 
     // When:
     subscription.request(1);

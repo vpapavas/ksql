@@ -18,28 +18,26 @@ package io.confluent.ksql.rest.entity;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Map;
 import java.util.Objects;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HostStatusEntity {
 
-  private HostInfoEntity hostInfoEntity;
   private boolean hostAlive;
   private long lastStatusUpdateMs;
+  private Map<String, ActiveStandbyEntity> perQueryActiveStandbyEntity;
 
   @JsonCreator
   public HostStatusEntity(
-      @JsonProperty("hostInfoEntity") final HostInfoEntity hostInfoEntity,
       @JsonProperty("hostAlive") final boolean hostAlive,
-      @JsonProperty("lastStatusUpdateMs") final long lastStatusUpdateMs
+      @JsonProperty("lastStatusUpdateMs") final long lastStatusUpdateMs,
+      @JsonProperty("perQueryActiveStandbyEntity")
+      final Map<String, ActiveStandbyEntity> perQueryActiveStandbyEntity
   ) {
-    this.hostInfoEntity = Objects.requireNonNull(hostInfoEntity, "hostInfoEntity");
     this.hostAlive = hostAlive;
     this.lastStatusUpdateMs = lastStatusUpdateMs;
-  }
-
-  public HostInfoEntity getHostInfoEntity() {
-    return hostInfoEntity;
+    this.perQueryActiveStandbyEntity = perQueryActiveStandbyEntity;
   }
 
   public boolean getHostAlive() {
@@ -50,8 +48,8 @@ public class HostStatusEntity {
     return lastStatusUpdateMs;
   }
 
-  public void setHostInfoEntity(final HostInfoEntity hostInfoEntity) {
-    this.hostInfoEntity = hostInfoEntity;
+  public Map<String, ActiveStandbyEntity> getPerQueryActiveStandbyEntity() {
+    return perQueryActiveStandbyEntity;
   }
 
   public void setHostAlive(final boolean hostAlive) {
@@ -60,6 +58,11 @@ public class HostStatusEntity {
 
   public void setLastStatusUpdateMs(final long lastStatusUpdateMs) {
     this.lastStatusUpdateMs = lastStatusUpdateMs;
+  }
+
+  public void setPerQueryActiveStandbyEntity(
+      final Map<String, ActiveStandbyEntity> perQueryActiveStandbyEntity) {
+    this.perQueryActiveStandbyEntity = perQueryActiveStandbyEntity;
   }
 
   @Override
@@ -73,17 +76,18 @@ public class HostStatusEntity {
     }
 
     final HostStatusEntity that = (HostStatusEntity) o;
-    return Objects.equals(hostInfoEntity, that.hostInfoEntity)
-        && hostAlive == that.hostAlive && lastStatusUpdateMs == that.lastStatusUpdateMs;
+    return hostAlive == that.hostAlive
+        && lastStatusUpdateMs == that.lastStatusUpdateMs
+        && perQueryActiveStandbyEntity.equals(that.perQueryActiveStandbyEntity);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(hostInfoEntity, hostAlive, lastStatusUpdateMs);
+    return Objects.hash(hostAlive, lastStatusUpdateMs, perQueryActiveStandbyEntity);
   }
 
   @Override
   public String toString() {
-    return hostInfoEntity + "," + hostAlive + "," + lastStatusUpdateMs;
+    return hostAlive + "," + lastStatusUpdateMs + "," + perQueryActiveStandbyEntity;
   }
 }

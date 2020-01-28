@@ -19,6 +19,7 @@ import static java.util.Objects.requireNonNull;
 
 import io.confluent.ksql.rest.client.KsqlClientUtil;
 import io.confluent.ksql.rest.client.RestResponse;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
 import io.confluent.ksql.rest.entity.KsqlRequest;
@@ -87,4 +88,10 @@ public class ServerInternalKsqlClient implements SimpleKsqlClient {
   public RestResponse<ClusterStatusResponse> makeClusterStatusRequest(final URI serverEndPoint) {
     throw new UnsupportedOperationException();
   }
+
+  @Override
+  public RestResponse<ActiveStandbyResponse> makeActiveStandbyRequest(final URI serverEndPoint) {
+    throw new UnsupportedOperationException();
+  }
+
 }

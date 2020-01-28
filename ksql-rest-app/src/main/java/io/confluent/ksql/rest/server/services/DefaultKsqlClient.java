@@ -26,6 +26,7 @@ import io.confluent.ksql.rest.client.KsqlClient;
 import io.confluent.ksql.rest.client.KsqlTarget;
 import io.confluent.ksql.rest.client.QueryStream;
 import io.confluent.ksql.rest.client.RestResponse;
+import io.confluent.ksql.rest.entity.ActiveStandbyResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
@@ -125,5 +126,16 @@ final class DefaultKsqlClient implements SimpleKsqlClient {
         .map(target::authorizationHeader)
         .orElse(target)
         .getClusterStatus();
+  }
+
+  @Override
+  public RestResponse<ActiveStandbyResponse> makeActiveStandbyRequest(final URI serverEndPoint) {
+    final KsqlTarget target = sharedClient
+        .target(serverEndPoint);
+
+    return authHeader
+        .map(target::authorizationHeader)
+        .orElse(target)
+        .getActiveStandByInformation();
   }
 }

@@ -22,11 +22,10 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.ksql.engine.KsqlEngine;
-import io.confluent.ksql.rest.entity.HostInfoEntity;
-import io.confluent.ksql.rest.entity.HostStatusEntity;
 import io.confluent.ksql.rest.server.HeartbeatAgent.Builder;
 import io.confluent.ksql.rest.server.HeartbeatAgent.CheckHeartbeatService;
 import io.confluent.ksql.rest.server.HeartbeatAgent.DiscoverClusterService;
+import io.confluent.ksql.rest.server.HeartbeatAgent.HostStatus;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.util.PersistentQueryMetadata;
 import java.util.List;
@@ -73,11 +72,9 @@ public class HeartbeatAgentTest {
         .heartbeatMissedThreshold(2)
         .build(ksqlEngine, serviceContext);
     heartbeatAgent.setLocalAddress(LOCALHOST_URL);
-    Map<String, HostStatusEntity> hostsStatus = new ConcurrentHashMap<>();
-    hostsStatus.put(localHostInfo.toString(), new HostStatusEntity(
-        new HostInfoEntity(localHostInfo.host(), localHostInfo.port()), true, 0L));
-    hostsStatus.put(remoteHostInfo.toString(), new HostStatusEntity(
-        new HostInfoEntity(remoteHostInfo.host(), remoteHostInfo.port()), true, 0L));
+    Map<HostInfo, HostStatus> hostsStatus = new ConcurrentHashMap<>();
+    hostsStatus.put(localHostInfo, new HostStatus(true, 0L));
+    hostsStatus.put(remoteHostInfo, new HostStatus(true, 0L));
     heartbeatAgent.setHostsStatus(hostsStatus);
     allMetadata0 = ImmutableList.of(streamsMetadata0);
     allMetadata1 = ImmutableList.of(streamsMetadata1);
@@ -100,7 +97,7 @@ public class HeartbeatAgentTest {
     discoverService.runOneIteration();
 
     // Then:
-    assertThat(heartbeatAgent.getHostsStatus().keySet().contains(remoteHostInfo.toString()), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().containsKey(remoteHostInfo), is(true));
   }
 
   @Test
@@ -121,7 +118,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(true));
   }
 
   @Test
@@ -142,7 +139,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(true));
   }
 
   @Test
@@ -158,7 +155,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(true));
   }
 
   @Test
@@ -177,7 +174,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(true));
   }
 
   @Test
@@ -196,7 +193,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(true));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(true));
   }
 
   @Test
@@ -216,7 +213,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(false));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(false));
   }
 
   @Test
@@ -238,7 +235,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(false));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(false));
   }
 
   @Test
@@ -260,7 +257,7 @@ public class HeartbeatAgentTest {
 
     // Then:
     assertThat(heartbeatAgent.getHostsStatus().entrySet(), hasSize(2));
-    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo.toString()).getHostAlive(), is(false));
+    assertThat(heartbeatAgent.getHostsStatus().get(remoteHostInfo).isHostAlive(), is(false));
   }
 
 }
