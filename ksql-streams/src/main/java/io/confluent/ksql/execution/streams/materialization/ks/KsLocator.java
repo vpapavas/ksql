@@ -19,7 +19,7 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.errorprone.annotations.Immutable;
-import io.confluent.ksql.execution.streams.IRoutingFilter;
+import io.confluent.ksql.execution.streams.RoutingFilter;
 import io.confluent.ksql.execution.streams.materialization.Locator;
 import io.confluent.ksql.execution.streams.materialization.MaterializationException;
 import java.net.URI;
@@ -63,7 +63,7 @@ final class KsLocator implements Locator {
   @Override
   public List<KsqlNode> locate(
       final Struct key,
-      final List<IRoutingFilter> routingFilters
+      final List<RoutingFilter> routingFilters
   ) {
     final KeyQueryMetadata metadata = kafkaStreams
         .queryMetadataForKey(stateStoreName, key, keySerializer);
@@ -89,16 +89,17 @@ final class KsLocator implements Locator {
     // The list is ordered by routing preference: active node is first, then standby nodes
     // in order of increasing lag.
     // If heartbeat is not enabled, all hosts are considered alive.
-    final List<KsqlNode> filteredHosts = new ArrayList<>();
-    for (IRoutingFilter routingFilter : routingFilters) {
-      filteredHosts.addAll(
-          hosts
-              .stream()
-              .filter(hostInfo -> routingFilter
-                .filter(hostInfo, stateStoreName, metadata.getPartition()))
-              .map(this::asNode)
-              .collect(Collectors.toList()));
-    }
+    final List<KsqlNode> filteredHosts = hosts.stream()
+        .filter(hostInfo -> {
+          for (RoutingFilter routingFilter : routingFilters) {
+            if (!routingFilter.filter(hostInfo, stateStoreName, metadata.getPartition())) {
+              return false;
+            }
+          }
+          return true;
+        })
+        .map(this::asNode)
+        .collect(Collectors.toList());
 
     LOG.info("Filtered and ordered hosts: {}", filteredHosts);
     return filteredHosts;
