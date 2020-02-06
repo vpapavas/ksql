@@ -34,7 +34,6 @@ import io.confluent.ksql.parser.tree.InsertInto;
 import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.parser.tree.SingleColumn;
 import io.confluent.ksql.parser.tree.Statement;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.FormatOptions;
 import io.confluent.ksql.util.KsqlConstants;
 import io.confluent.ksql.util.KsqlException;
@@ -99,7 +98,7 @@ public final class AstSanitizer {
         final InsertInto node,
         final StatementRewriter.Context<Void> ctx
     ) {
-      final DataSource<?> target = getSource(
+      final DataSource target = getSource(
           node.getTarget(),
           node.getLocation().map(
               l -> new NodeLocation(
@@ -135,16 +134,16 @@ public final class AstSanitizer {
       final Expression expression = ctx.process(singleColumn.getExpression());
       if (expression instanceof QualifiedColumnReferenceExp) {
         final SourceName source = ((QualifiedColumnReferenceExp) expression).getQualifier();
-        final ColumnRef name = ((QualifiedColumnReferenceExp) expression).getReference();
+        final ColumnName name = ((QualifiedColumnReferenceExp) expression).getReference();
         if (dataSourceExtractor.isJoin()
-            && dataSourceExtractor.getCommonFieldNames().contains(name.name())) {
+            && dataSourceExtractor.getCommonFieldNames().contains(name)) {
           alias = ColumnName.generatedJoinColumnAlias(source, name);
         } else {
-          alias = name.name();
+          alias = name;
         }
       } else if (expression instanceof UnqualifiedColumnReferenceExp) {
-        final ColumnRef name = ((UnqualifiedColumnReferenceExp) expression).getReference();
-        alias = name.name();
+        final ColumnName name = ((UnqualifiedColumnReferenceExp) expression).getReference();
+        alias = name;
       } else if (expression instanceof DereferenceExpression) {
         final DereferenceExpression dereferenceExp = (DereferenceExpression) expression;
         final String dereferenceExpressionString = dereferenceExp.toString();
@@ -166,11 +165,11 @@ public final class AstSanitizer {
           .replace(KsqlConstants.STRUCT_FIELD_REF, "__");
     }
 
-    private DataSource<?> getSource(
+    private DataSource getSource(
         final SourceName name,
         final Optional<NodeLocation> location
     ) {
-      final DataSource<?> source = metaStore.getSource(name);
+      final DataSource source = metaStore.getSource(name);
       if (source == null) {
         throw new InvalidColumnReferenceException(location, name.name() + " does not exist.");
       }
@@ -197,15 +196,14 @@ public final class AstSanitizer {
     public Optional<Expression> visitColumnReference(
         final UnqualifiedColumnReferenceExp expression,
         final Context<Void> ctx) {
-      final ColumnRef columnRef = expression.getReference();
+      final ColumnName columnName = expression.getReference();
       try {
-        final ColumnName columnName = columnRef.name();
         final SourceName sourceName = dataSourceExtractor.getAliasFor(columnName);
         return Optional.of(
             new QualifiedColumnReferenceExp(
                 expression.getLocation(),
                 sourceName,
-                ColumnRef.of(columnName)
+                columnName
             )
         );
       } catch (final KsqlException e) {

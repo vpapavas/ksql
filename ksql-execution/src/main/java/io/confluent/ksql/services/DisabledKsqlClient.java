@@ -18,10 +18,12 @@ package io.confluent.ksql.services;
 import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
+import io.confluent.ksql.rest.entity.LagReportingMessage;
 import io.confluent.ksql.rest.entity.StreamedRow;
+import io.confluent.ksql.util.KsqlHostInfo;
 import java.net.URI;
 import java.util.List;
-import org.apache.kafka.streams.state.HostInfo;
+import java.util.Map;
 
 /**
  * A KSQL client implementation for use when communication with other nodes is not supported.
@@ -43,7 +45,8 @@ public final class DisabledKsqlClient implements SimpleKsqlClient {
   @Override
   public RestResponse<List<StreamedRow>> makeQueryRequest(
       final URI serverEndPoint,
-      final String sql
+      final String sql,
+      final Map<String, ?> properties
   ) {
     throw new UnsupportedOperationException("KSQL client is disabled");
   }
@@ -51,7 +54,7 @@ public final class DisabledKsqlClient implements SimpleKsqlClient {
   @Override
   public void makeAsyncHeartbeatRequest(
       final URI serverEndPoint,
-      final HostInfo host,
+      final KsqlHostInfo host,
       final long timestamp
   ) {
     throw new UnsupportedOperationException("KSQL client is disabled");
@@ -59,6 +62,14 @@ public final class DisabledKsqlClient implements SimpleKsqlClient {
 
   @Override
   public RestResponse<ClusterStatusResponse> makeClusterStatusRequest(final URI serverEndPoint) {
+    throw new UnsupportedOperationException("KSQL client is disabled");
+  }
+
+  @Override
+  public void makeAsyncLagReportRequest(
+      final URI serverEndPoint,
+      final LagReportingMessage lagReportingMessage
+  ) {
     throw new UnsupportedOperationException("KSQL client is disabled");
   }
 }

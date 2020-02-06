@@ -231,7 +231,7 @@ public class ListSourceExecutorTest {
     );
     final PersistentQueryMetadata metadata = (PersistentQueryMetadata) result.getQuery()
         .orElseThrow(IllegalArgumentException::new);
-    final DataSource<?> stream = engine.getEngine().getMetaStore().getSource(SourceName.of("SINK"));
+    final DataSource stream = engine.getEngine().getMetaStore().getSource(SourceName.of("SINK"));
 
     // When:
     final SourceDescriptionEntity sourceDescription = (SourceDescriptionEntity)
@@ -257,6 +257,7 @@ public class ListSourceExecutorTest {
             ImmutableList.of(new RunningQuery(
                 metadata.getStatementString(),
                 ImmutableSet.of(metadata.getSinkName().toString(FormatOptions.noEscape())),
+                ImmutableSet.of(metadata.getResultTopic().getKafkaTopicName()),
                 metadata.getQueryId(),
                 Optional.of(metadata.getState())
             )),
@@ -305,7 +306,7 @@ public class ListSourceExecutorTest {
 
   private static void assertSourceListWithWarning(
       final KsqlEntity entity,
-      final DataSource<?>... sources) {
+      final DataSource... sources) {
     assertThat(entity, instanceOf(SourceDescriptionList.class));
     final SourceDescriptionList listing = (SourceDescriptionList) entity;
     assertThat(

@@ -20,8 +20,8 @@ import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.execution.expression.tree.QualifiedColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.TraversalExpressionVisitor;
 import io.confluent.ksql.execution.expression.tree.UnqualifiedColumnReferenceExp;
+import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.SourceName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.util.KsqlConstants;
 import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.SchemaUtil;
@@ -42,12 +42,9 @@ class ExpressionAnalyzer {
     this.sourceSchemas = Objects.requireNonNull(sourceSchemas, "sourceSchemas");
   }
 
-  Set<SourceName> analyzeExpression(
-      final Expression expression,
-      final boolean allowWindowMetaFields
-  ) {
+  Set<SourceName> analyzeExpression(final Expression expression) {
     final Set<SourceName> referencedSources = new HashSet<>();
-    final SourceExtractor extractor = new SourceExtractor(allowWindowMetaFields, referencedSources);
+    final SourceExtractor extractor = new SourceExtractor(referencedSources);
     extractor.process(expression, null);
     return referencedSources;
   }
@@ -55,14 +52,9 @@ class ExpressionAnalyzer {
   private final class SourceExtractor extends TraversalExpressionVisitor<Object> {
 
     private final Set<SourceName> referencedSources;
-    private final boolean allowWindowMetaFields;
 
-    SourceExtractor(
-        final boolean allowWindowMetaFields,
-        final Set<SourceName> referencedSources
-    ) {
-      this.allowWindowMetaFields = allowWindowMetaFields;
-      this.referencedSources = referencedSources;
+    SourceExtractor(final Set<SourceName> referencedSources) {
+      this.referencedSources = Objects.requireNonNull(referencedSources, "referencedSources");
     }
 
     @Override
@@ -70,7 +62,7 @@ class ExpressionAnalyzer {
         final UnqualifiedColumnReferenceExp node,
         final Object context
     ) {
-      final ColumnRef reference = node.getReference();
+      final ColumnName reference = node.getReference();
       getSource(Optional.empty(), reference).ifPresent(referencedSources::add);
       return null;
     }
@@ -87,29 +79,23 @@ class ExpressionAnalyzer {
 
     private Optional<SourceName> getSource(
         final Optional<SourceName> sourceName,
-        final ColumnRef name
+        final ColumnName name
     ) {
       final Set<SourceName> sourcesWithField = sourceSchemas.sourcesWithField(sourceName, name);
-
       if (sourcesWithField.isEmpty()) {
-        if (allowWindowMetaFields && name.name().equals(SchemaUtil.WINDOWSTART_NAME)) {
-          // window start doesn't have a source as its a special hacky column
-          return Optional.empty();
-        }
-
         throw new KsqlException("Column '"
-            + sourceName.map(n -> n.name() + KsqlConstants.DOT + name.name().name())
-                .orElse(name.name().name())
+            + sourceName.map(n -> n.name() + KsqlConstants.DOT + name.name())
+                .orElse(name.name())
             + "' cannot be resolved.");
       }
 
       if (sourcesWithField.size() > 1) {
         final String possibilities = sourcesWithField.stream()
-            .map(source -> SchemaUtil.buildAliasedFieldName(source.name(), name.name().name()))
+            .map(source -> SchemaUtil.buildAliasedFieldName(source.name(), name.name()))
             .sorted()
             .collect(Collectors.joining(", "));
 
-        throw new KsqlException("Column '" + name.name().name() + "' is ambiguous. "
+        throw new KsqlException("Column '" + name.name() + "' is ambiguous. "
             + "Could be any of: " + possibilities);
       }
 

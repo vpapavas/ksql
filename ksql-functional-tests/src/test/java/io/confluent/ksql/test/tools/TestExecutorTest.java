@@ -36,7 +36,7 @@ import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.SourceName;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.serde.FormatInfo;
 import io.confluent.ksql.serde.KeyFormat;
 import io.confluent.ksql.serde.ValueFormat;
@@ -104,7 +104,7 @@ public class TestExecutorTest {
   private SchemaRegistryClient srClient;
 
   private TestExecutor executor;
-  private final Map<SourceName, DataSource<?>> allSources = new HashMap<>();
+  private final Map<SourceName, DataSource> allSources = new HashMap<>();
 
   @Before
   public void setUp() {
@@ -356,11 +356,11 @@ public class TestExecutorTest {
   private void givenDataSourceTopic(final LogicalSchema schema) {
     final KsqlTopic topic = mock(KsqlTopic.class);
     when(topic.getKeyFormat())
-        .thenReturn(KeyFormat.of(FormatInfo.of(Format.KAFKA), Optional.empty()));
+        .thenReturn(KeyFormat.of(FormatInfo.of(FormatFactory.KAFKA.name()), Optional.empty()));
     when(topic.getValueFormat())
-        .thenReturn(ValueFormat.of(FormatInfo.of(Format.JSON)));
+        .thenReturn(ValueFormat.of(FormatInfo.of(FormatFactory.JSON.name())));
 
-    final DataSource<?> dataSource = mock(DataSource.class);
+    final DataSource dataSource = mock(DataSource.class);
     when(dataSource.getKsqlTopic()).thenReturn(topic);
     when(dataSource.getSchema()).thenReturn(schema);
     when(dataSource.getKafkaTopicName()).thenReturn(TestExecutorTest.SINK_TOPIC_NAME);

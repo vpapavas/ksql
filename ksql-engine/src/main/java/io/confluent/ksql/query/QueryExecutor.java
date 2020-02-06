@@ -46,10 +46,10 @@ import io.confluent.ksql.serde.GenericKeySerDe;
 import io.confluent.ksql.serde.KeyFormat;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.util.KsqlConfig;
-import io.confluent.ksql.util.KsqlConstants;
 import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.PersistentQueryMetadata;
 import io.confluent.ksql.util.QueryMetadata;
+import io.confluent.ksql.util.ReservedInternalTopics;
 import io.confluent.ksql.util.TransientQueryMetadata;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -192,7 +192,7 @@ public final class QueryExecutor {
   public PersistentQueryMetadata buildQuery(
       final String statementText,
       final QueryId queryId,
-      final DataSource<?> sinkDataSource,
+      final DataSource sinkDataSource,
       final Set<SourceName> sources,
       final ExecutionStep<?> physicalPlan,
       final String planSummary
@@ -221,7 +221,8 @@ public final class QueryExecutor {
             built.kafkaStreams,
             querySchema,
             sinkDataSource.getKsqlTopic().getKeyFormat(),
-            streamsProperties
+            streamsProperties,
+            applicationId
         ));
     return new PersistentQueryMetadata(
         statementText,
@@ -274,7 +275,7 @@ public final class QueryExecutor {
   }
 
   private String getServiceId() {
-    return KsqlConstants.KSQL_INTERNAL_TOPIC_PREFIX
+    return ReservedInternalTopics.KSQL_INTERNAL_TOPIC_PREFIX
         + ksqlConfig.getString(KsqlConfig.KSQL_SERVICE_ID_CONFIG);
   }
 
@@ -345,7 +346,8 @@ public final class QueryExecutor {
       final KafkaStreams kafkaStreams,
       final PhysicalSchema schema,
       final KeyFormat keyFormat,
-      final Map<String, Object> streamsProperties
+      final Map<String, Object> streamsProperties,
+      final String applicationId
   ) {
     final Serializer<Struct> keySerializer = new GenericKeySerDe().create(
         keyFormat.getFormatInfo(),
@@ -362,9 +364,10 @@ public final class QueryExecutor {
             kafkaStreams,
             info.getStateStoreSchema(),
             keySerializer,
-            keyFormat.getWindowType(),
+            keyFormat.getWindowInfo(),
             streamsProperties,
-            ksqlConfig
+            ksqlConfig,
+            applicationId
         );
 
     return ksMaterialization.map(ksMat -> (queryId, contextStacker) -> ksqlMaterializationFactory

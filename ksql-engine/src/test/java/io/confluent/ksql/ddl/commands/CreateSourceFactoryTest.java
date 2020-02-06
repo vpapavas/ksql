@@ -21,11 +21,14 @@ import static io.confluent.ksql.model.WindowType.TUMBLING;
 import static io.confluent.ksql.parser.tree.TableElement.Namespace.KEY;
 import static io.confluent.ksql.parser.tree.TableElement.Namespace.VALUE;
 import static io.confluent.ksql.schema.ksql.ColumnMatchers.keyColumn;
-import static io.confluent.ksql.serde.Format.AVRO;
-import static io.confluent.ksql.serde.Format.JSON;
-import static io.confluent.ksql.serde.Format.KAFKA;
+import static io.confluent.ksql.schema.ksql.types.SqlTypes.BIGINT;
+import static io.confluent.ksql.serde.FormatFactory.AVRO;
+import static io.confluent.ksql.serde.FormatFactory.JSON;
+import static io.confluent.ksql.serde.FormatFactory.KAFKA;
 import static io.confluent.ksql.util.SchemaUtil.ROWKEY_NAME;
 import static io.confluent.ksql.util.SchemaUtil.ROWTIME_NAME;
+import static io.confluent.ksql.util.SchemaUtil.WINDOWEND_NAME;
+import static io.confluent.ksql.util.SchemaUtil.WINDOWSTART_NAME;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
@@ -58,7 +61,6 @@ import io.confluent.ksql.parser.tree.TableElement.Namespace;
 import io.confluent.ksql.parser.tree.TableElements;
 import io.confluent.ksql.properties.with.CommonCreateConfigs;
 import io.confluent.ksql.properties.with.CreateConfigs;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.PersistenceSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
@@ -67,6 +69,7 @@ import io.confluent.ksql.serde.KeySerdeFactory;
 import io.confluent.ksql.serde.SerdeOption;
 import io.confluent.ksql.serde.ValueSerdeFactory;
 import io.confluent.ksql.serde.WindowInfo;
+import io.confluent.ksql.serde.avro.AvroFormat;
 import io.confluent.ksql.services.KafkaTopicClient;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.util.KsqlConfig;
@@ -94,10 +97,10 @@ public class CreateSourceFactoryTest {
       tableElement(Namespace.KEY, ROWKEY_NAME.name(), new Type(SqlTypes.INTEGER));
 
   private static final TableElement ELEMENT1 =
-      tableElement(Namespace.VALUE, "bob", new Type(SqlTypes.STRING));
+      tableElement(VALUE, "bob", new Type(SqlTypes.STRING));
 
   private static final TableElement ELEMENT2 =
-      tableElement(Namespace.VALUE, "hojjat", new Type(SqlTypes.BIGINT));
+      tableElement(VALUE, "hojjat", new Type(BIGINT));
 
   private static final TableElements ONE_ELEMENTS = TableElements.of(ELEMENT1);
 
@@ -107,7 +110,7 @@ public class CreateSourceFactoryTest {
   private static final LogicalSchema EXPECTED_SCHEMA = LogicalSchema.builder()
       .keyColumn(ROWKEY_NAME, SqlTypes.INTEGER)
       .valueColumn(ColumnName.of("bob"), SqlTypes.STRING)
-      .valueColumn(ColumnName.of("hojjat"), SqlTypes.BIGINT)
+      .valueColumn(ColumnName.of("hojjat"), BIGINT)
       .build();
 
   private static final String TOPIC_NAME = "some topic";
@@ -186,8 +189,8 @@ public class CreateSourceFactoryTest {
     // Given:
     final CreateTable ddlStatement = new CreateTable(SOME_NAME,
         TableElements.of(
-            tableElement(Namespace.VALUE, "COL1", new Type(SqlTypes.BIGINT)),
-            tableElement(Namespace.VALUE, "COL2", new Type(SqlTypes.STRING))),
+            tableElement(VALUE, "COL1", new Type(BIGINT)),
+            tableElement(VALUE, "COL2", new Type(SqlTypes.STRING))),
         true, withProperties);
 
     // When:
@@ -481,7 +484,7 @@ public class CreateSourceFactoryTest {
     assertThat(
         cmd.getTimestampColumn(),
         is(Optional.of(
-            new TimestampColumn(ColumnRef.of(ELEMENT2.getName()), Optional.empty()))
+            new TimestampColumn(ELEMENT2.getName(), Optional.empty()))
         )
     );
   }
@@ -506,7 +509,7 @@ public class CreateSourceFactoryTest {
     assertThat(
         cmd.getTimestampColumn(),
         is(Optional.of(
-            new TimestampColumn(ColumnRef.of(ELEMENT2.getName()), Optional.empty()))
+            new TimestampColumn(ELEMENT2.getName(), Optional.empty()))
         )
     );
   }
@@ -533,7 +536,7 @@ public class CreateSourceFactoryTest {
     assertThat(
         cmd.getTimestampColumn(),
         is(Optional.of(
-            new TimestampColumn(ColumnRef.of(ELEMENT1.getName()), Optional.of("%s")))
+            new TimestampColumn(ELEMENT1.getName(), Optional.of("%s")))
         )
     );
   }
@@ -578,7 +581,7 @@ public class CreateSourceFactoryTest {
     assertThat(result.getSchema(), is(LogicalSchema.builder()
         .keyColumn(ColumnName.of("ROWKEY"), SqlTypes.STRING)
         .valueColumn(ColumnName.of("bob"), SqlTypes.STRING)
-        .valueColumn(ColumnName.of("hojjat"), SqlTypes.BIGINT)
+        .valueColumn(ColumnName.of("hojjat"), BIGINT)
         .build()
     ));
   }
@@ -591,7 +594,7 @@ public class CreateSourceFactoryTest {
         withProperties);
 
     when(keySerdeFactory.create(
-        FormatInfo.of(KAFKA, Optional.empty(), Optional.empty()),
+        FormatInfo.of(KAFKA.name()),
         PersistenceSchema.from(EXPECTED_SCHEMA.keyConnectSchema(), false),
         ksqlConfig,
         serviceContext.getSchemaRegistryClientFactory(),
@@ -614,7 +617,7 @@ public class CreateSourceFactoryTest {
         withProperties);
 
     when(valueSerdeFactory.create(
-        FormatInfo.of(JSON, Optional.empty(), Optional.empty()),
+        FormatInfo.of(JSON.name()),
         PersistenceSchema.from(EXPECTED_SCHEMA.valueConnectSchema(), false),
         ksqlConfig,
         serviceContext.getSchemaRegistryClientFactory(),
@@ -640,7 +643,7 @@ public class CreateSourceFactoryTest {
     );
 
     // Then:
-    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA)));
+    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA.name())));
     assertThat(cmd.getWindowInfo(), is(Optional.empty()));
   }
 
@@ -661,7 +664,7 @@ public class CreateSourceFactoryTest {
     // Then:
     assertThat(
         cmd.getFormats().getValueFormat(),
-        is(FormatInfo.of(AVRO, Optional.of("full.schema.name"), Optional.empty())));
+        is(FormatInfo.of(AVRO.name(), ImmutableMap.of(AvroFormat.FULL_SCHEMA_NAME, "full.schema.name"))));
   }
 
   @Test
@@ -677,7 +680,7 @@ public class CreateSourceFactoryTest {
     );
 
     // Then:
-    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA)));
+    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA.name())));
     assertThat(cmd.getWindowInfo(), is(Optional.of(WindowInfo.of(SESSION, Optional.empty()))));
   }
 
@@ -697,7 +700,7 @@ public class CreateSourceFactoryTest {
     );
 
     // Then:
-    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA)));
+    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA.name())));
     assertThat(
         cmd.getWindowInfo(),
         is(Optional.of(WindowInfo.of(TUMBLING, Optional.of(Duration.ofMinutes(1)))))
@@ -720,7 +723,7 @@ public class CreateSourceFactoryTest {
     );
 
     // Then:
-    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA)));
+    assertThat(cmd.getFormats().getKeyFormat(), is(FormatInfo.of(KAFKA.name())));
     assertThat(
         cmd.getWindowInfo(),
         is(Optional.of(WindowInfo.of(HOPPING, Optional.of(Duration.ofSeconds(2)))))
@@ -732,7 +735,7 @@ public class CreateSourceFactoryTest {
     // Given:
     final CreateStream statement = new CreateStream(
         SOME_NAME,
-        TableElements.of(tableElement(Namespace.VALUE, ROWTIME_NAME.name(), new Type(SqlTypes.BIGINT))),
+        TableElements.of(tableElement(VALUE, ROWTIME_NAME.name(), new Type(BIGINT))),
         true,
         withProperties
     );
@@ -750,7 +753,7 @@ public class CreateSourceFactoryTest {
     // Given:
     final CreateStream statement = new CreateStream(
         SOME_NAME,
-        TableElements.of(tableElement(Namespace.KEY, ROWTIME_NAME.name(), new Type(SqlTypes.BIGINT))),
+        TableElements.of(tableElement(Namespace.KEY, ROWTIME_NAME.name(), new Type(BIGINT))),
         true,
         withProperties
     );
@@ -758,6 +761,42 @@ public class CreateSourceFactoryTest {
     // Then:
     expectedException.expect(KsqlException.class);
     expectedException.expectMessage("'ROWTIME' is a reserved column name.");
+
+    // When:
+    createSourceFactory.createStreamCommand(statement, ksqlConfig);
+  }
+
+  @Test
+  public void shouldThrowOnWindowStartValueColumn() {
+    // Given:
+    final CreateStream statement = new CreateStream(
+        SOME_NAME,
+        TableElements.of(tableElement(VALUE, WINDOWSTART_NAME.name(), new Type(BIGINT))),
+        true,
+        withProperties
+    );
+
+    // Then:
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage("'WINDOWSTART' is a reserved column name.");
+
+    // When:
+    createSourceFactory.createStreamCommand(statement, ksqlConfig);
+  }
+
+  @Test
+  public void shouldThrowOnWindowEndValueColumn() {
+    // Given:
+    final CreateStream statement = new CreateStream(
+        SOME_NAME,
+        TableElements.of(tableElement(VALUE, WINDOWEND_NAME.name(), new Type(BIGINT))),
+        true,
+        withProperties
+    );
+
+    // Then:
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage("'WINDOWEND' is a reserved column name.");
 
     // When:
     createSourceFactory.createStreamCommand(statement, ksqlConfig);

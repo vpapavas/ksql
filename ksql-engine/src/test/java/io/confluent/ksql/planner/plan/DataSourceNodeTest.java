@@ -22,7 +22,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -44,10 +43,9 @@ import io.confluent.ksql.metastore.model.KsqlTable;
 import io.confluent.ksql.model.WindowType;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.SourceName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.serde.FormatInfo;
 import io.confluent.ksql.serde.KeyFormat;
 import io.confluent.ksql.serde.SerdeOption;
@@ -77,8 +75,8 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class DataSourceNodeTest {
 
-  private static final ColumnRef TIMESTAMP_FIELD
-      = ColumnRef.of(ColumnName.of("timestamp"));
+  private static final ColumnName TIMESTAMP_FIELD
+      = ColumnName.of("timestamp");
   private static final PlanNodeId PLAN_NODE_ID = new PlanNodeId("0");
   private static final SourceName SOURCE_NAME = SourceName.of("datasource");
 
@@ -95,11 +93,11 @@ public class DataSourceNodeTest {
       .valueColumn(FIELD1, SqlTypes.INTEGER)
       .valueColumn(FIELD2, SqlTypes.STRING)
       .valueColumn(FIELD3, SqlTypes.STRING)
-      .valueColumn(TIMESTAMP_FIELD.name(), SqlTypes.BIGINT)
+      .valueColumn(TIMESTAMP_FIELD, SqlTypes.BIGINT)
       .valueColumn(ColumnName.of("key"), SqlTypes.STRING)
       .build();
 
-  private static final KeyField KEY_FIELD = KeyField.of(ColumnRef.of(FIELD1));
+  private static final KeyField KEY_FIELD = KeyField.of(FIELD1);
   private static final TimestampColumn TIMESTAMP_COLUMN =
       new TimestampColumn(TIMESTAMP_FIELD, Optional.empty());
 
@@ -111,20 +109,20 @@ public class DataSourceNodeTest {
       KEY_FIELD,
       Optional.of(
           new TimestampColumn(
-              ColumnRef.of(ColumnName.of("timestamp")),
+              ColumnName.of("timestamp"),
               Optional.empty()
           )
       ),
         false,
       new KsqlTopic(
           "topic",
-          KeyFormat.nonWindowed(FormatInfo.of(Format.KAFKA)),
-          ValueFormat.of(FormatInfo.of(Format.JSON))
+          KeyFormat.nonWindowed(FormatInfo.of(FormatFactory.KAFKA.name())),
+          ValueFormat.of(FormatInfo.of(FormatFactory.JSON.name()))
       )
   );
 
   @Mock
-  private DataSource<?> dataSource;
+  private DataSource dataSource;
   @Mock
   private Serde<GenericRow> rowSerde;
   @Mock
@@ -167,8 +165,8 @@ public class DataSourceNodeTest {
     when(dataSource.getKsqlTopic()).thenReturn(topic);
     when(dataSource.getDataSourceType()).thenReturn(DataSourceType.KTABLE);
 
-    when(schemaKStreamFactory.create(any(), any(), any(), any(), any()))
-        .thenAnswer(inv -> inv.<DataSource<?>>getArgument(1)
+    when(schemaKStreamFactory.create(any(), any(), any(), any()))
+        .thenAnswer(inv -> inv.<DataSource>getArgument(1)
             .getDataSourceType() == DataSourceType.KSTREAM
             ? stream : table
         );
@@ -232,13 +230,13 @@ public class DataSourceNodeTest {
         SourceName.of("datasource"),
         REAL_SCHEMA,
         SerdeOption.none(),
-        KeyField.of(ColumnRef.of(ColumnName.of("field1"))),
+        KeyField.of(ColumnName.of("field1")),
         Optional.of(TIMESTAMP_COLUMN),
         false,
         new KsqlTopic(
             "topic2",
-            KeyFormat.nonWindowed(FormatInfo.of(Format.KAFKA)),
-            ValueFormat.of(FormatInfo.of(Format.JSON))
+            KeyFormat.nonWindowed(FormatInfo.of(FormatFactory.KAFKA.name())),
+            ValueFormat.of(FormatInfo.of(FormatFactory.JSON.name()))
         )
     );
 
@@ -246,7 +244,8 @@ public class DataSourceNodeTest {
         PLAN_NODE_ID,
         table,
         table.getName(),
-        Collections.emptyList());
+        Collections.emptyList()
+    );
 
     // When:
     final SchemaKStream<?> result = buildStream(node);
@@ -286,7 +285,7 @@ public class DataSourceNodeTest {
     node.buildStream(ksqlStreamBuilder);
 
     // Then:
-    verify(schemaKStreamFactory).create(any(), any(), any(), any(), any());
+    verify(schemaKStreamFactory).create(any(), any(), any(), any());
   }
 
   // should this even be possible? if you are using a timestamp extractor then shouldn't the name
@@ -300,7 +299,7 @@ public class DataSourceNodeTest {
     node.buildStream(ksqlStreamBuilder);
 
     // Then:
-    verify(schemaKStreamFactory).create(any(), any(), any(), any(), any());
+    verify(schemaKStreamFactory).create(any(), any(), any(), any());
   }
 
   @Test
@@ -318,8 +317,7 @@ public class DataSourceNodeTest {
         same(ksqlStreamBuilder),
         same(dataSource),
         stackerCaptor.capture(),
-        same(node.getKeyField()),
-        eq(SOURCE_NAME)
+        same(node.getKeyField())
     );
     assertThat(
         stackerCaptor.getValue().getQueryContext().getContext(),
@@ -340,8 +338,7 @@ public class DataSourceNodeTest {
         same(ksqlStreamBuilder),
         same(dataSource),
         stackerCaptor.capture(),
-        same(node.getKeyField()),
-        eq(SOURCE_NAME)
+        same(node.getKeyField())
     );
     assertThat(
         stackerCaptor.getValue().getQueryContext().getContext(),
@@ -385,7 +382,7 @@ public class DataSourceNodeTest {
   }
 
   private void givenWindowedSource(final boolean windowed) {
-    final FormatInfo format = FormatInfo.of(Format.KAFKA);
+    final FormatInfo format = FormatInfo.of(FormatFactory.KAFKA.name());
 
     final KeyFormat keyFormat = windowed
         ? KeyFormat.windowed(format, WindowInfo.of(WindowType.SESSION, Optional.empty()))

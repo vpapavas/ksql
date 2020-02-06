@@ -27,14 +27,16 @@ import io.confluent.ksql.rest.client.KsqlTarget;
 import io.confluent.ksql.rest.client.QueryStream;
 import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
-import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
+import io.confluent.ksql.rest.entity.KsqlHostInfoEntity;
+import io.confluent.ksql.rest.entity.LagReportingMessage;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.services.SimpleKsqlClient;
+import io.confluent.ksql.util.KsqlHostInfo;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import org.apache.kafka.streams.state.HostInfo;
 
 final class DefaultKsqlClient implements SimpleKsqlClient {
 
@@ -69,23 +71,20 @@ final class DefaultKsqlClient implements SimpleKsqlClient {
     final KsqlTarget target = sharedClient
         .target(serverEndPoint);
 
-    return authHeader
-        .map(target::authorizationHeader)
-        .orElse(target)
-        .postKsqlRequest(sql, Optional.empty());
+    return getTarget(target, authHeader).postKsqlRequest(sql, Optional.empty());
   }
 
   @Override
   public RestResponse<List<StreamedRow>> makeQueryRequest(
       final URI serverEndPoint,
-      final String sql
+      final String sql,
+      final Map<String, ?> properties
   ) {
     final KsqlTarget target = sharedClient
-        .target(serverEndPoint);
+        .target(serverEndPoint)
+        .properties(properties);
 
-    final RestResponse<QueryStream> resp = authHeader
-        .map(target::authorizationHeader)
-        .orElse(target)
+    final RestResponse<QueryStream> resp = getTarget(target, authHeader)
         .postQueryRequest(sql, Optional.empty());
 
     if (resp.isErroneous()) {
@@ -105,15 +104,13 @@ final class DefaultKsqlClient implements SimpleKsqlClient {
   @Override
   public void makeAsyncHeartbeatRequest(
       final URI serverEndPoint,
-      final HostInfo host,
+      final KsqlHostInfo host,
       final long timestamp) {
     final KsqlTarget target = sharedClient
         .target(serverEndPoint);
 
-    authHeader
-        .map(target::authorizationHeader)
-        .orElse(target)
-        .postAsyncHeartbeatRequest(new HostInfoEntity(host.host(), host.port()), timestamp);
+    getTarget(target, authHeader)
+        .postAsyncHeartbeatRequest(new KsqlHostInfoEntity(host.host(), host.port()), timestamp);
   }
 
   @Override
@@ -121,9 +118,23 @@ final class DefaultKsqlClient implements SimpleKsqlClient {
     final KsqlTarget target = sharedClient
         .target(serverEndPoint);
 
+    return getTarget(target, authHeader).getClusterStatus();
+  }
+
+  @Override
+  public void makeAsyncLagReportRequest(
+      final URI serverEndPoint,
+      final LagReportingMessage lagReportingMessage
+  ) {
+    final KsqlTarget target = sharedClient
+        .target(serverEndPoint);
+
+    getTarget(target, authHeader).postAsyncLagReportingRequest(lagReportingMessage);
+  }
+
+  private KsqlTarget getTarget(final KsqlTarget target, final Optional<String> authHeader) {
     return authHeader
         .map(target::authorizationHeader)
-        .orElse(target)
-        .getClusterStatus();
+        .orElse(target);
   }
 }

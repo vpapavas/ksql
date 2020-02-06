@@ -43,7 +43,6 @@ import io.confluent.ksql.logging.processing.ProcessingLogMessageSchema.MessageTy
 import io.confluent.ksql.logging.processing.ProcessingLogger;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.FunctionName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
 import io.confluent.ksql.util.KsqlConfig;
@@ -74,10 +73,10 @@ public class SqlPredicateTest {
       .build();
 
   private static final UnqualifiedColumnReferenceExp COL0 =
-      new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("COL0")));
+      new UnqualifiedColumnReferenceExp(ColumnName.of("COL0"));
 
   private static final UnqualifiedColumnReferenceExp COL2 =
-      new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("COL2")));
+      new UnqualifiedColumnReferenceExp(ColumnName.of("COL2"));
 
   private static final KsqlScalarFunction LEN_FUNCTION = KsqlScalarFunction.createLegacyBuiltIn(
       SqlTypes.INTEGER,
@@ -86,7 +85,7 @@ public class SqlPredicateTest {
       LenDummy.class
   );
 
-  private static final GenericRow VALUE = new GenericRow(22L, 33.3, "a string");
+  private static final GenericRow VALUE = GenericRow.genericRow(22L, 33.3, "a string");
 
   @Mock
   private ProcessingLogger processingLogger;
@@ -147,7 +146,7 @@ public class SqlPredicateTest {
     // When:
     predicate.transform(
         "key",
-        new GenericRow("wrong", "types", "in", "here", "to", "force", "error"),
+        GenericRow.genericRow("wrong", "types", "in", "here", "to", "force", "error"),
         ctx
     );
 

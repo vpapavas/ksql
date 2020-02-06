@@ -22,15 +22,17 @@ import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
 import io.confluent.ksql.rest.entity.KsqlRequest;
+import io.confluent.ksql.rest.entity.LagReportingMessage;
 import io.confluent.ksql.rest.entity.StreamedRow;
 import io.confluent.ksql.rest.server.resources.KsqlResource;
 import io.confluent.ksql.security.KsqlSecurityContext;
 import io.confluent.ksql.services.SimpleKsqlClient;
+import io.confluent.ksql.util.KsqlHostInfo;
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import javax.ws.rs.core.Response;
-import org.apache.kafka.streams.state.HostInfo;
 
 /**
  * A KSQL client implementation that sends requests to KsqlResource directly, rather than going
@@ -69,7 +71,8 @@ public class ServerInternalKsqlClient implements SimpleKsqlClient {
   @Override
   public RestResponse<List<StreamedRow>> makeQueryRequest(
       final URI serverEndpoint,
-      final String sql
+      final String sql,
+      final Map<String, ?> properties
   ) {
     throw new UnsupportedOperationException();
   }
@@ -77,7 +80,7 @@ public class ServerInternalKsqlClient implements SimpleKsqlClient {
   @Override
   public void makeAsyncHeartbeatRequest(
       final URI serverEndPoint,
-      final HostInfo host,
+      final KsqlHostInfo host,
       final long timestamp
   ) {
     throw new UnsupportedOperationException();
@@ -85,6 +88,14 @@ public class ServerInternalKsqlClient implements SimpleKsqlClient {
 
   @Override
   public RestResponse<ClusterStatusResponse> makeClusterStatusRequest(final URI serverEndPoint) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void makeAsyncLagReportRequest(
+      final URI serverEndPoint,
+      final LagReportingMessage lagReportingMessage
+  ) {
     throw new UnsupportedOperationException();
   }
 }

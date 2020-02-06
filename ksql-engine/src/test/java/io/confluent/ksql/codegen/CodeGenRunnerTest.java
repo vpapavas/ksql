@@ -54,11 +54,10 @@ import io.confluent.ksql.metastore.model.KsqlStream;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.FunctionName;
 import io.confluent.ksql.name.SourceName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.SchemaConverters;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.serde.FormatInfo;
 import io.confluent.ksql.serde.KeyFormat;
 import io.confluent.ksql.serde.SerdeOption;
@@ -70,7 +69,6 @@ import io.confluent.ksql.util.MetaStoreFixture;
 import io.confluent.ksql.util.SchemaUtil;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -133,7 +131,7 @@ public class CodeGenRunnerTest {
 
     private static final Schema STRUCT_SCHEMA = SchemaConverters.sqlToConnectConverter()
         .toConnectSchema(
-            META_STORE_SCHEMA.findValueColumn(ColumnRef.of(ColumnName.of("COL15")))
+            META_STORE_SCHEMA.findValueColumn(ColumnName.of("COL15"))
                 .get()
                 .type());
 
@@ -182,8 +180,8 @@ public class CodeGenRunnerTest {
 
         final KsqlTopic ksqlTopic = new KsqlTopic(
             "codegen_test",
-            KeyFormat.nonWindowed(FormatInfo.of(Format.KAFKA)),
-            ValueFormat.of(FormatInfo.of(Format.JSON))
+            KeyFormat.nonWindowed(FormatInfo.of(FormatFactory.KAFKA.name())),
+            ValueFormat.of(FormatInfo.of(FormatFactory.JSON.name()))
         );
 
         final KsqlStream<?> ksqlStream = new KsqlStream<>(
@@ -191,7 +189,7 @@ public class CodeGenRunnerTest {
             SourceName.of("CODEGEN_TEST"),
             META_STORE_SCHEMA,
             SerdeOption.none(),
-            KeyField.of(ColumnRef.of(ColumnName.of("COL0"))),
+            KeyField.of(ColumnName.of("COL0")),
             Optional.empty(),
             false,
             ksqlTopic
@@ -1041,11 +1039,11 @@ public class CodeGenRunnerTest {
     }
 
     private static GenericRow genericRow(final Object... columns) {
-        return genericRow(Arrays.asList(columns));
+        return GenericRow.genericRow(columns);
     }
 
     private static GenericRow genericRow(final List<Object> columns) {
-        return new GenericRow(columns);
+        return new GenericRow().appendAll(columns);
     }
 
     public static final class WhenCondition implements Kudf {

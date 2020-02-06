@@ -27,7 +27,7 @@ import io.confluent.ksql.parser.SqlFormatter;
 import io.confluent.ksql.parser.tree.DropStatement;
 import io.confluent.ksql.parser.tree.Statement;
 import io.confluent.ksql.schema.registry.SchemaRegistryUtil;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.services.KafkaTopicClient;
 import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.statement.ConfiguredStatement;
@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  * passed through. Furthermore, it will remove the DELETE TOPIC clause from
  * the statement, indicating that the operation has already been done.
  *
- * <p>If the topic being deleted is {@link Format#AVRO},
+ * <p>If the topic being deleted is {@link FormatFactory#AVRO},
  * this injector will also clean up the corresponding schema in the schema
  * registry.
  */
@@ -94,7 +94,7 @@ public class TopicDeleteInjector implements Injector {
     }
 
     final SourceName sourceName = dropStatement.getName();
-    final DataSource<?> source = metastore.getSource(sourceName);
+    final DataSource source = metastore.getSource(sourceName);
 
     if (source != null) {
       checkTopicRefs(source);
@@ -108,7 +108,7 @@ public class TopicDeleteInjector implements Injector {
       }
 
       try {
-        if (source.getKsqlTopic().getValueFormat().getFormat() == Format.AVRO) {
+        if (source.getKsqlTopic().getValueFormat().getFormat() == FormatFactory.AVRO) {
           SchemaRegistryUtil.deleteSubjectWithRetries(
                   schemaRegistryClient,
                   source.getKafkaTopicName() + KsqlConstants.SCHEMA_REGISTRY_VALUE_SUFFIX);
@@ -134,10 +134,10 @@ public class TopicDeleteInjector implements Injector {
     }
   }
 
-  private void checkTopicRefs(final DataSource<?> source) {
+  private void checkTopicRefs(final DataSource source) {
     final String topicName = source.getKafkaTopicName();
     final SourceName sourceName = source.getName();
-    final Map<SourceName, DataSource<?>> sources = metastore.getAllDataSources();
+    final Map<SourceName, DataSource> sources = metastore.getAllDataSources();
     final String using = sources.values().stream()
         .filter(s -> s.getKafkaTopicName().equals(topicName))
         .map(DataSource::getName)

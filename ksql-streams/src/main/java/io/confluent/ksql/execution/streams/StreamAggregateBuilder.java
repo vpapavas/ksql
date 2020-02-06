@@ -27,13 +27,15 @@ import io.confluent.ksql.execution.plan.KeySerdeFactory;
 import io.confluent.ksql.execution.plan.StreamAggregate;
 import io.confluent.ksql.execution.plan.StreamWindowedAggregate;
 import io.confluent.ksql.execution.streams.transform.KsTransformer;
+import io.confluent.ksql.execution.transform.KsqlProcessingContext;
+import io.confluent.ksql.execution.transform.KsqlTransformer;
 import io.confluent.ksql.execution.transform.window.WindowSelectMapper;
 import io.confluent.ksql.execution.windows.HoppingWindowExpression;
 import io.confluent.ksql.execution.windows.KsqlWindowExpression;
 import io.confluent.ksql.execution.windows.SessionWindowExpression;
 import io.confluent.ksql.execution.windows.TumblingWindowExpression;
 import io.confluent.ksql.execution.windows.WindowVisitor;
-import io.confluent.ksql.schema.ksql.ColumnRef;
+import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.PhysicalSchema;
 import java.time.Duration;
@@ -48,6 +50,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -76,12 +79,13 @@ public final class StreamAggregateBuilder {
       final MaterializedFactory materializedFactory,
       final AggregateParamsFactory aggregateParamsFactory) {
     final LogicalSchema sourceSchema = groupedStream.getSchema();
-    final List<ColumnRef> nonFuncColumns = aggregate.getNonAggregateColumns();
+    final List<ColumnName> nonFuncColumns = aggregate.getNonAggregateColumns();
     final AggregateParams aggregateParams = aggregateParamsFactory.create(
         sourceSchema,
         nonFuncColumns,
         queryBuilder.getFunctionRegistry(),
-        aggregate.getAggregationFunctions()
+        aggregate.getAggregationFunctions(),
+        false
     );
     final LogicalSchema aggregateSchema = aggregateParams.getAggregateSchema();
     final LogicalSchema resultSchema = aggregateParams.getSchema();
@@ -140,6 +144,7 @@ public final class StreamAggregateBuilder {
     );
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
   static KTableHolder<Windowed<Struct>> build(
       final KGroupedStreamHolder groupedStream,
       final StreamWindowedAggregate aggregate,
@@ -148,12 +153,13 @@ public final class StreamAggregateBuilder {
       final AggregateParamsFactory aggregateParamsFactory
   ) {
     final LogicalSchema sourceSchema = groupedStream.getSchema();
-    final List<ColumnRef> nonFuncColumns = aggregate.getNonAggregateColumns();
+    final List<ColumnName> nonFuncColumns = aggregate.getNonAggregateColumns();
     final AggregateParams aggregateParams = aggregateParamsFactory.create(
         sourceSchema,
         nonFuncColumns,
         queryBuilder.getFunctionRegistry(),
-        aggregate.getAggregationFunctions()
+        aggregate.getAggregationFunctions(),
+        true
     );
     final LogicalSchema aggregateSchema = aggregateParams.getAggregateSchema();
     final LogicalSchema resultSchema = aggregateParams.getSchema();
@@ -185,11 +191,30 @@ public final class StreamAggregateBuilder {
             resultSchema
         );
 
+    reduced = reduced.transformValues(
+        () -> new KsTransformer<>(new WindowBoundsPopulator()),
+        Named.as(StreamsUtil.buildOpName(
+            AggregateBuilderUtils.windowSelectContext(aggregate)
+        ) + "2")
+    );
+
+    materializationBuilder.map(
+        pl -> (KsqlTransformer) new WindowBoundsPopulator(),
+        resultSchema,
+        AggregateBuilderUtils.windowSelectContext(aggregate)
+    );
+
     final WindowSelectMapper windowSelectMapper = aggregateParams.getWindowSelectMapper();
     if (windowSelectMapper.hasSelects()) {
       reduced = reduced.transformValues(
           () -> new KsTransformer<>(windowSelectMapper.getTransformer()),
           Named.as(StreamsUtil.buildOpName(AggregateBuilderUtils.windowSelectContext(aggregate)))
+      );
+
+      materializationBuilder.map(
+          pl -> (KsqlTransformer) windowSelectMapper.getTransformer(),
+          resultSchema,
+          AggregateBuilderUtils.windowSelectContext(aggregate)
       );
     }
 
@@ -295,6 +320,26 @@ public final class StreamAggregateBuilder {
               materializedFactory.create(
                   keySerde, valueSerde, StreamsUtil.buildOpName(queryContext))
           );
+    }
+  }
+
+  private static final class WindowBoundsPopulator
+      implements KsqlTransformer<Windowed<Struct>, GenericRow> {
+
+    @Override
+    public GenericRow transform(
+        final Windowed<Struct> readOnlyKey,
+        final GenericRow value,
+        final KsqlProcessingContext ctx
+    ) {
+      if (value == null) {
+        return null;
+      }
+      final Window window = readOnlyKey.window();
+      value.ensureAdditionalCapacity(2);
+      value.append(window.start());
+      value.append(window.end());
+      return value;
     }
   }
 }

@@ -15,17 +15,16 @@
 
 package io.confluent.ksql.integration;
 
-import static io.confluent.ksql.serde.Format.JSON;
+import static io.confluent.ksql.GenericRow.genericRow;
+import static io.confluent.ksql.serde.FormatFactory.JSON;
 import static io.confluent.ksql.test.util.AssertEventually.assertThatEventually;
 import static io.confluent.ksql.test.util.ConsumerTestUtil.hasUniqueRecords;
 import static io.confluent.ksql.test.util.MapMatchers.mapHasItems;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.common.utils.IntegrationTest;
 import io.confluent.ksql.GenericRow;
@@ -133,7 +132,7 @@ public class WindowingIntTest {
 
     final Map<String, GenericRow> expected = ImmutableMap.of(
         "ITEM_1",
-        new GenericRow(ImmutableList.of("ITEM_1", 2, 20.0, 2.0))
+        genericRow("ITEM_1", 2L, 20.0, 2.0)
     );
 
     // Then:
@@ -152,7 +151,7 @@ public class WindowingIntTest {
 
     final Map<Windowed<String>, GenericRow> expected = ImmutableMap.of(
         new Windowed<>("ITEM_1", new TimeWindow(tenSecWindowStartMs, Long.MAX_VALUE)),
-        new GenericRow(ImmutableList.of("ITEM_1", 2, 20.0, 100.0))
+        genericRow("ITEM_1", 2L, 20.0, 100.0)
     );
 
     // Then:
@@ -173,9 +172,9 @@ public class WindowingIntTest {
 
     final Map<Windowed<String>, GenericRow> expected = ImmutableMap.of(
         new Windowed<>("ITEM_1", new TimeWindow(firstWindowStart, Long.MAX_VALUE)),
-        new GenericRow(ImmutableList.of("ITEM_1", 2, 20.0, 200.0)),
+        genericRow("ITEM_1", 2L, 20.0, 200.0),
         new Windowed<>("ITEM_1", new TimeWindow(secondWindowStart, Long.MAX_VALUE)),
-        new GenericRow(ImmutableList.of("ITEM_1", 2, 20.0, 200.0))
+        genericRow("ITEM_1", 2L, 20.0, 200.0)
     );
 
     // Then:
@@ -196,17 +195,17 @@ public class WindowingIntTest {
     final Map<Windowed<String>, GenericRow> expected = ImmutableMap
         .<Windowed<String>, GenericRow>builder()
         .put(new Windowed<>("ORDER_1", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_1", 2, 20.0)))
+            genericRow("ORDER_1", 2L, 20.0))
         .put(new Windowed<>("ORDER_2", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_2", 2, 40.0)))
+            genericRow("ORDER_2", 2L, 40.0))
         .put(new Windowed<>("ORDER_3", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_3", 2, 60.0)))
+            genericRow("ORDER_3", 2L, 60.0))
         .put(new Windowed<>("ORDER_4", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_4", 2, 80.0)))
+            genericRow("ORDER_4", 2L, 80.0))
         .put(new Windowed<>("ORDER_5", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_5", 2, 100.0)))
+            genericRow("ORDER_5", 2L, 100.0))
         .put(new Windowed<>("ORDER_6", new SessionWindow(batch0SentMs, sessionEnd)),
-            new GenericRow(ImmutableList.of("ORDER_6", 6, 420.0)))
+            genericRow("ORDER_6", 6L, 420.0))
         .build();
 
     // Then:
@@ -216,7 +215,7 @@ public class WindowingIntTest {
 
   private void givenTable(final String sql) {
     ksqlContext.sql(String.format(sql, resultStream0));
-    final DataSource<?> source = ksqlContext.getMetaStore().getSource(SourceName.of(resultStream0));
+    final DataSource source = ksqlContext.getMetaStore().getSource(SourceName.of(resultStream0));
     resultSchema = PhysicalSchema.from(
         source.getSchema(),
         source.getSerdeOptions()
@@ -242,7 +241,7 @@ public class WindowingIntTest {
   ) {
     ksqlContext.sql("CREATE TABLE " + resultStream1 + " AS SELECT * FROM " + resultStream0 + ";");
 
-    final DataSource<?> source = ksqlContext.getMetaStore().getSource(SourceName.of(resultStream1));
+    final DataSource source = ksqlContext.getMetaStore().getSource(SourceName.of(resultStream1));
 
     resultSchema = PhysicalSchema.from(
         source.getSchema(),

@@ -15,9 +15,10 @@
 
 package io.confluent.ksql.integration;
 
-import static io.confluent.ksql.serde.Format.AVRO;
-import static io.confluent.ksql.serde.Format.DELIMITED;
-import static io.confluent.ksql.serde.Format.JSON;
+import static io.confluent.ksql.GenericRow.genericRow;
+import static io.confluent.ksql.serde.FormatFactory.AVRO;
+import static io.confluent.ksql.serde.FormatFactory.DELIMITED;
+import static io.confluent.ksql.serde.FormatFactory.JSON;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -31,10 +32,11 @@ import io.confluent.ksql.metastore.model.DataSource;
 import io.confluent.ksql.name.SourceName;
 import io.confluent.ksql.schema.ksql.PhysicalSchema;
 import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.avro.AvroFormat;
+import io.confluent.ksql.serde.json.JsonFormat;
 import io.confluent.ksql.test.util.KsqlIdentifierTestUtil;
 import io.confluent.ksql.util.ItemDataProvider;
 import io.confluent.ksql.util.OrderDataProvider;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -104,12 +106,12 @@ public class UdfIntTest {
   }
 
   public UdfIntTest(final Format format) {
-    switch (format) {
-      case AVRO:
+    switch (format.name()) {
+      case AvroFormat.NAME:
         this.testData =
             new TestData(format, AVRO_TOPIC_NAME, AVRO_STREAM_NAME, avroRecordMetadataMap);
         break;
-      case JSON:
+      case JsonFormat.NAME:
         this.testData =
             new TestData(format, JSON_TOPIC_NAME, JSON_STREAM_NAME, jsonRecordMetadataMap);
         break;
@@ -152,7 +154,7 @@ public class UdfIntTest {
     final Map<String, GenericRow> results = consumeOutputMessages();
 
     assertThat(results, is(ImmutableMap.of(8L,
-        new GenericRow(Arrays.asList("ITEM_8", 800.0, 1110.0, 12.0, true)))));
+        genericRow("ITEM_8", 800.0, 1110.0, 12.0, true))));
   }
 
   @Test
@@ -178,7 +180,7 @@ public class UdfIntTest {
     final Map<String, GenericRow> results = consumeOutputMessages();
 
     assertThat(results, is(ImmutableMap.of(8L,
-        new GenericRow(Arrays.asList(80, "true", 8.0, "80.0")))));
+        genericRow(80, "true", 8.0, "80.0"))));
   }
 
   @Test
@@ -205,7 +207,7 @@ public class UdfIntTest {
     final long ts = testData.recordMetadata.get(8L).timestamp();
 
     assertThat(results, equalTo(ImmutableMap.of(8L,
-        new GenericRow(Arrays.asList(8L, ts, 8, ts + 10000, ts + 100, "ORDER_6", "ITEM_8")))));
+        genericRow(8L, ts, 8L, ts + 10000, ts + 100, "ORDER_6", "ITEM_8"))));
   }
 
   @Test
@@ -225,7 +227,7 @@ public class UdfIntTest {
     final Map<String, GenericRow> results = consumeOutputMessages();
 
     assertThat(results, equalTo(Collections.singletonMap("ITEM_1",
-        new GenericRow(Arrays.asList("ITEM_1", "home cinema")))));
+        genericRow("ITEM_1", "home cinema"))));
   }
 
   private void createSourceStream() {
@@ -252,7 +254,7 @@ public class UdfIntTest {
 
   private <K> Map<K, GenericRow> consumeOutputMessages() {
 
-    final DataSource<?> source = ksqlContext
+    final DataSource source = ksqlContext
         .getMetaStore()
         .getSource(SourceName.of(resultStreamName));
 

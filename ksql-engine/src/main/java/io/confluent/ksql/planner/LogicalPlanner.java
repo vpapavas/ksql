@@ -51,7 +51,6 @@ import io.confluent.ksql.planner.plan.PlanNodeId;
 import io.confluent.ksql.planner.plan.ProjectNode;
 import io.confluent.ksql.planner.plan.RepartitionNode;
 import io.confluent.ksql.schema.ksql.Column;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.FormatOptions;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.LogicalSchema.Builder;
@@ -84,7 +83,7 @@ public class LogicalPlanner {
     this.ksqlConfig = Objects.requireNonNull(ksqlConfig, "ksqlConfig");
     Objects.requireNonNull(analysis, "analysis");
     final ColumnReferenceRewriter refRewriter =
-        new ColumnReferenceRewriter(analysis.getFromSourceSchemas());
+        new ColumnReferenceRewriter(analysis.getFromSourceSchemas(false));
     this.analysis = new RewrittenAnalysis(analysis, refRewriter::process);
     this.aggregateAnalysis = new RewrittenAggregateAnalysis(
         Objects.requireNonNull(aggregateAnalysis, "aggregateAnalysis"),
@@ -152,7 +151,7 @@ public class LogicalPlanner {
       final LogicalSchema inputSchema,
       final ImmutableAnalysis analysis
   ) {
-    final Optional<ColumnRef> timestampColumnName =
+    final Optional<ColumnName> timestampColumnName =
         analysis.getProperties().getTimestampColumnName();
     final Optional<TimestampColumn> timestampColumn = timestampColumnName.map(
         n -> new TimestampColumn(n, analysis.getProperties().getTimestampFormat())
@@ -175,16 +174,14 @@ public class LogicalPlanner {
         : null;
 
     final Optional<ColumnName> keyFieldName = getSelectAliasMatching((expression, alias) ->
-            expression.equals(groupBy)
-                && !SchemaUtil.isFieldName(alias.name(), SchemaUtil.ROWTIME_NAME.name())
-                && !SchemaUtil.isFieldName(alias.name(), SchemaUtil.ROWKEY_NAME.name()),
+            expression.equals(groupBy) && !SchemaUtil.isSystemColumn(alias),
         sourcePlanNode.getSelectExpressions());
 
     return new AggregateNode(
         new PlanNodeId("Aggregate"),
         sourcePlanNode,
         schema,
-        keyFieldName.map(ColumnRef::of),
+        keyFieldName,
         groupByExps,
         analysis.getWindowExpression(),
         aggregateAnalysis.getAggregateFunctionArguments(),
@@ -199,7 +196,7 @@ public class LogicalPlanner {
       final PlanNode sourcePlanNode,
       final String id,
       final List<SelectExpression> projection) {
-    final ColumnRef sourceKeyFieldName = sourcePlanNode
+    final ColumnName sourceKeyFieldName = sourcePlanNode
         .getKeyField()
         .ref()
         .orElse(null);
@@ -218,7 +215,7 @@ public class LogicalPlanner {
         sourcePlanNode,
         projection,
         schema,
-        keyFieldName.map(ColumnRef::of)
+        keyFieldName
     );
   }
 
@@ -239,13 +236,13 @@ public class LogicalPlanner {
     if (!(partitionBy instanceof UnqualifiedColumnReferenceExp)) {
       keyField = KeyField.none();
     } else {
-      final ColumnRef columnRef = ((UnqualifiedColumnReferenceExp) partitionBy).getReference();
+      final ColumnName columnName = ((UnqualifiedColumnReferenceExp) partitionBy).getReference();
       final LogicalSchema sourceSchema = sourceNode.getSchema();
 
       final Column proposedKey = sourceSchema
-          .findColumn(columnRef)
+          .findColumn(columnName)
           .orElseThrow(() -> new KsqlException("Invalid identifier for PARTITION BY clause: '"
-              + columnRef.name().toString(FormatOptions.noEscape()) + "' Only columns from the "
+              + columnName.toString(FormatOptions.noEscape()) + "' Only columns from the "
               + "source schema can be referenced in the PARTITION BY clause."));
 
       switch (proposedKey.namespace()) {
@@ -253,7 +250,7 @@ public class LogicalPlanner {
           keyField = sourceNode.getKeyField();
           break;
         case VALUE:
-          keyField = KeyField.of(columnRef);
+          keyField = KeyField.of(columnName);
           break;
         default:
           keyField = KeyField.none();
@@ -385,8 +382,7 @@ public class LogicalPlanner {
       final List<SelectExpression> projection) {
     final ExpressionTypeManager expressionTypeManager = new ExpressionTypeManager(
         schema,
-        functionRegistry,
-        true
+        functionRegistry
     );
 
     final Builder builder = LogicalSchema.builder();
@@ -416,13 +412,14 @@ public class LogicalPlanner {
       keyType = SqlTypes.STRING;
     } else {
       final ExpressionTypeManager typeManager =
-          new ExpressionTypeManager(sourcePlanNode.getSchema(), functionRegistry, true);
+          new ExpressionTypeManager(sourcePlanNode.getSchema(), functionRegistry);
 
       keyType = typeManager.getExpressionSqlType(groupByExps.get(0));
     }
 
     final LogicalSchema sourceSchema = buildProjectionSchema(
-        sourcePlanNode.getSchema(),
+        sourcePlanNode.getSchema()
+            .withMetaAndKeyColsInValue(analysis.getWindowExpression().isPresent()),
         sourcePlanNode.getSelectExpressions()
     );
 
@@ -439,7 +436,7 @@ public class LogicalPlanner {
     final LogicalSchema sourceSchema = sourceNode.getSchema();
 
     final ExpressionTypeManager typeManager =
-        new ExpressionTypeManager(sourceSchema, functionRegistry, true);
+        new ExpressionTypeManager(sourceSchema, functionRegistry);
 
     final SqlType keyType = typeManager.getExpressionSqlType(partitionBy);
 
@@ -478,7 +475,7 @@ public class LogicalPlanner {
         final SourceName sourceName =
             sourceSchemas.sourcesWithField(Optional.empty(), node.getReference()).iterator().next();
         return Optional.of(new UnqualifiedColumnReferenceExp(
-            ColumnRef.of(ColumnName.generatedJoinColumnAlias(sourceName, node.getReference()))
+            ColumnName.generatedJoinColumnAlias(sourceName, node.getReference())
         ));
       }
       return Optional.empty();
@@ -491,9 +488,7 @@ public class LogicalPlanner {
     ) {
       if (sourceSchemas.isJoin()) {
         return Optional.of(new UnqualifiedColumnReferenceExp(
-            ColumnRef.of(
-                ColumnName.generatedJoinColumnAlias(node.getQualifier(), node.getReference())
-            )
+            ColumnName.generatedJoinColumnAlias(node.getQualifier(), node.getReference())
         ));
       } else {
         return Optional.of(new UnqualifiedColumnReferenceExp(node.getReference()));
@@ -543,7 +538,7 @@ public class LogicalPlanner {
 
     private Expression rewriteFinalSelectExpression(final Expression expression) {
       if (expression instanceof UnqualifiedColumnReferenceExp
-          && ((UnqualifiedColumnReferenceExp) expression).getReference().name().isAggregate()) {
+          && ((UnqualifiedColumnReferenceExp) expression).getReference().isAggregate()) {
         return expression;
       }
       return ExpressionTreeRewriter.rewriteWith(rewriter, expression);

@@ -15,7 +15,7 @@
 
 package io.confluent.ksql.materialization.ks;
 
-import static io.confluent.ksql.serde.Format.JSON;
+import static io.confluent.ksql.serde.FormatFactory.JSON;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
@@ -286,7 +286,7 @@ public class KsMaterializationFunctionalTest {
     final MaterializedWindowedTable table = materialization.windowed();
 
     rows.forEach((k, v) -> {
-      final Window w = Window.of(k.window().startTime(), Optional.empty());
+      final Window w = Window.of(k.window().startTime(), k.window().endTime());
       final Struct key = asKeyStruct(k.key(), query.getPhysicalSchema());
 
       final List<WindowedRow> resultAtWindowStart = table.get(key, Range.singleton(w.start()));
@@ -332,7 +332,7 @@ public class KsMaterializationFunctionalTest {
     final MaterializedWindowedTable table = materialization.windowed();
 
     rows.forEach((k, v) -> {
-      final Window w = Window.of(k.window().startTime(), Optional.empty());
+      final Window w = Window.of(k.window().startTime(), k.window().endTime());
       final Struct key = asKeyStruct(k.key(), query.getPhysicalSchema());
 
       final List<WindowedRow> resultAtWindowStart = table.get(key, Range.singleton(w.start()));
@@ -376,7 +376,7 @@ public class KsMaterializationFunctionalTest {
     final MaterializedWindowedTable table = materialization.windowed();
 
     rows.forEach((k, v) -> {
-      final Window w = Window.of(k.window().startTime(), Optional.of(k.window().endTime()));
+      final Window w = Window.of(k.window().startTime(), k.window().endTime());
       final Struct key = asKeyStruct(k.key(), query.getPhysicalSchema());
 
       final List<WindowedRow> resultAtWindowStart = table.get(key, Range.singleton(w.start()));
@@ -582,7 +582,7 @@ public class KsMaterializationFunctionalTest {
         + " (" + USER_DATA_PROVIDER.ksqlSchemaString() + ")"
         + " WITH ("
         + "    kafka_topic='" + USERS_TOPIC + "', "
-        + "    value_format='" + VALUE_FORMAT + "', "
+        + "    value_format='" + VALUE_FORMAT.name() + "', "
         + "    key = '" + USER_DATA_PROVIDER.key() + "'"
         + ");"
     );
@@ -591,7 +591,7 @@ public class KsMaterializationFunctionalTest {
         + " (" + USER_DATA_PROVIDER.ksqlSchemaString() + ")"
         + " WITH ("
         + "    kafka_topic='" + USERS_TOPIC + "', "
-        + "    value_format='" + VALUE_FORMAT + "', "
+        + "    value_format='" + VALUE_FORMAT.name() + "', "
         + "    key = '" + USER_DATA_PROVIDER.key() + "'"
         + ");"
     );

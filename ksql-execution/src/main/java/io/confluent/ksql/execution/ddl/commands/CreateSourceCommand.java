@@ -20,7 +20,6 @@ import io.confluent.ksql.execution.timestamp.TimestampColumn;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.SourceName;
 import io.confluent.ksql.schema.ksql.Column;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.FormatOptions;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlType;
@@ -92,9 +91,8 @@ public abstract class CreateSourceCommand implements DdlCommand {
   }
 
   private static void validate(final LogicalSchema schema, final Optional<ColumnName> keyField) {
-    if (schema.findValueColumn(ColumnRef.of(SchemaUtil.ROWKEY_NAME)).isPresent()
-        || schema.findValueColumn(ColumnRef.of(SchemaUtil.ROWTIME_NAME)).isPresent()) {
-      throw new IllegalArgumentException("Schema contains implicit columns in value schema");
+    if (schema.valueContainsAny(SchemaUtil.systemColumnNames())) {
+      throw new IllegalArgumentException("Schema contains system columns in value schema");
     }
 
     if (schema.key().size() != 1) {
@@ -102,7 +100,7 @@ public abstract class CreateSourceCommand implements DdlCommand {
     }
 
     if (keyField.isPresent()) {
-      final SqlType keyFieldType = schema.findColumn(ColumnRef.of(keyField.get()))
+      final SqlType keyFieldType = schema.findColumn(keyField.get())
           .map(Column::type)
           .orElseThrow(IllegalArgumentException::new);
 

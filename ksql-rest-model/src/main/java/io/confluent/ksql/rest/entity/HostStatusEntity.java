@@ -18,28 +18,33 @@ package io.confluent.ksql.rest.entity;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableMap;
+import com.google.errorprone.annotations.Immutable;
+import java.util.Map;
 import java.util.Objects;
 
+@Immutable
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HostStatusEntity {
 
-  private HostInfoEntity hostInfoEntity;
-  private boolean hostAlive;
-  private long lastStatusUpdateMs;
+  private final boolean hostAlive;
+  private final long lastStatusUpdateMs;
+  private final ImmutableMap<String, ActiveStandbyEntity> activeStandbyPerQuery;
+  private final HostStoreLags hostStoreLags;
 
   @JsonCreator
   public HostStatusEntity(
-      @JsonProperty("hostInfoEntity") final HostInfoEntity hostInfoEntity,
       @JsonProperty("hostAlive") final boolean hostAlive,
-      @JsonProperty("lastStatusUpdateMs") final long lastStatusUpdateMs
+      @JsonProperty("lastStatusUpdateMs") final long lastStatusUpdateMs,
+      @JsonProperty("activeStandbyPerQuery")
+      final Map<String, ActiveStandbyEntity> activeStandbyPerQuery,
+      @JsonProperty("hostStoreLags") final HostStoreLags hostStoreLags
   ) {
-    this.hostInfoEntity = Objects.requireNonNull(hostInfoEntity, "hostInfoEntity");
     this.hostAlive = hostAlive;
     this.lastStatusUpdateMs = lastStatusUpdateMs;
-  }
-
-  public HostInfoEntity getHostInfoEntity() {
-    return hostInfoEntity;
+    this.activeStandbyPerQuery = ImmutableMap.copyOf(Objects.requireNonNull(
+        activeStandbyPerQuery, "activeStandbyPerQuery"));
+    this.hostStoreLags = Objects.requireNonNull(hostStoreLags, "hostStoreLags");
   }
 
   public boolean getHostAlive() {
@@ -50,16 +55,12 @@ public class HostStatusEntity {
     return lastStatusUpdateMs;
   }
 
-  public void setHostInfoEntity(final HostInfoEntity hostInfoEntity) {
-    this.hostInfoEntity = hostInfoEntity;
+  public ImmutableMap<String, ActiveStandbyEntity> getActiveStandbyPerQuery() {
+    return activeStandbyPerQuery;
   }
 
-  public void setHostAlive(final boolean hostAlive) {
-    this.hostAlive = hostAlive;
-  }
-
-  public void setLastStatusUpdateMs(final long lastStatusUpdateMs) {
-    this.lastStatusUpdateMs = lastStatusUpdateMs;
+  public HostStoreLags getHostStoreLags() {
+    return hostStoreLags;
   }
 
   @Override
@@ -73,17 +74,24 @@ public class HostStatusEntity {
     }
 
     final HostStatusEntity that = (HostStatusEntity) o;
-    return Objects.equals(hostInfoEntity, that.hostInfoEntity)
-        && hostAlive == that.hostAlive && lastStatusUpdateMs == that.lastStatusUpdateMs;
+    return hostAlive == that.hostAlive
+        && lastStatusUpdateMs == that.lastStatusUpdateMs
+        && Objects.equals(activeStandbyPerQuery, that.activeStandbyPerQuery)
+        && Objects.equals(hostStoreLags, that.hostStoreLags);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(hostInfoEntity, hostAlive, lastStatusUpdateMs);
+    return Objects.hash(hostAlive, lastStatusUpdateMs, activeStandbyPerQuery, hostStoreLags);
   }
 
   @Override
   public String toString() {
-    return hostInfoEntity + "," + hostAlive + "," + lastStatusUpdateMs;
+    return "HostStatusEntity{"
+        + "hostAlive=" + hostAlive
+        + ", lastStatusUpdateMs=" + lastStatusUpdateMs
+        + ", activeStandbyPerQuery=" + activeStandbyPerQuery
+        + ", hostStoreLags=" + hostStoreLags
+        + '}';
   }
 }

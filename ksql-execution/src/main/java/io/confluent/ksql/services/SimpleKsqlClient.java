@@ -18,11 +18,13 @@ package io.confluent.ksql.services;
 import io.confluent.ksql.rest.client.RestResponse;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
+import io.confluent.ksql.rest.entity.LagReportingMessage;
 import io.confluent.ksql.rest.entity.StreamedRow;
+import io.confluent.ksql.util.KsqlHostInfo;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.concurrent.ThreadSafe;
-import org.apache.kafka.streams.state.HostInfo;
 
 @ThreadSafe
 public interface SimpleKsqlClient {
@@ -34,7 +36,8 @@ public interface SimpleKsqlClient {
 
   RestResponse<List<StreamedRow>> makeQueryRequest(
       URI serverEndPoint,
-      String sql
+      String sql,
+      Map<String, ?> properties
   );
 
   /**
@@ -45,7 +48,7 @@ public interface SimpleKsqlClient {
    */
   void makeAsyncHeartbeatRequest(
       URI serverEndPoint,
-      HostInfo host,
+      KsqlHostInfo host,
       long timestamp
   );
 
@@ -55,4 +58,15 @@ public interface SimpleKsqlClient {
    * @return response containing the cluster status.
    */
   RestResponse<ClusterStatusResponse> makeClusterStatusRequest(URI serverEndPoint);
+
+  /**
+   * Send a request to remote Ksql server to inquire to inquire about which state stores the
+   * remote server maintains as an active and standby.
+   * @param serverEndPoint the remote destination.
+   * @param lagReportingMessage the host lag data
+   */
+  void makeAsyncLagReportRequest(
+      URI serverEndPoint,
+      LagReportingMessage lagReportingMessage
+  );
 }

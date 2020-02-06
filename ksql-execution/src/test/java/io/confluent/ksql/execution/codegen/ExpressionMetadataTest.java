@@ -13,7 +13,6 @@ import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.function.udf.Kudf;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.FunctionName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.types.SqlType;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
 import java.util.concurrent.CountDownLatch;
@@ -53,12 +52,12 @@ public class ExpressionMetadataTest {
   public void shouldEvaluateExpressionWithValueColumnSpecs() throws Exception {
     // Given:
     spec.addParameter(
-        ColumnRef.of(ColumnName.of("foo1")),
+        ColumnName.of("foo1"),
         Integer.class,
         0
     );
     spec.addParameter(
-        ColumnRef.of(ColumnName.of("foo2")),
+        ColumnName.of("foo2"),
         Integer.class,
         1
     );
@@ -70,7 +69,7 @@ public class ExpressionMetadataTest {
     );
 
     // When:
-    final Object result = expressionMetadata.evaluate(new GenericRow(123, 456));
+    final Object result = expressionMetadata.evaluate(GenericRow.genericRow(123, 456));
 
     // Then:
     assertThat(result, equalTo(RETURN_VALUE));
@@ -85,7 +84,7 @@ public class ExpressionMetadataTest {
         udf
     );
     spec.addParameter(
-        ColumnRef.of(ColumnName.of("foo1")),
+        ColumnName.of("foo1"),
         Integer.class,
         0
     );
@@ -98,7 +97,7 @@ public class ExpressionMetadataTest {
     );
 
     // When:
-    final Object result = expressionMetadata.evaluate(new GenericRow(123));
+    final Object result = expressionMetadata.evaluate(GenericRow.genericRow(123));
 
     // Then:
     assertThat(result, equalTo(RETURN_VALUE));
@@ -109,12 +108,12 @@ public class ExpressionMetadataTest {
   public void shouldPerformThreadSafeParameterEvaluation() throws Exception {
     // Given:
     spec.addParameter(
-        ColumnRef.of(ColumnName.of("foo1")),
+        ColumnName.of("foo1"),
         Integer.class,
         0
     );
     spec.addParameter(
-        ColumnRef.of(ColumnName.of("foo2")),
+        ColumnName.of("foo2"),
         Integer.class,
         1
     );
@@ -138,7 +137,7 @@ public class ExpressionMetadataTest {
     );
 
     final Thread thread = new Thread(
-        () -> expressionMetadata.evaluate(new GenericRow(123, 456))
+        () -> expressionMetadata.evaluate(GenericRow.genericRow(123, 456))
     );
 
     // When:
@@ -148,7 +147,7 @@ public class ExpressionMetadataTest {
     assertThat(threadLatch.await(10, TimeUnit.SECONDS), is(true));
 
     // When:
-    expressionMetadata.evaluate(new GenericRow(100, 200));
+    expressionMetadata.evaluate(GenericRow.genericRow(100, 200));
     mainLatch.countDown();
 
     // Then:

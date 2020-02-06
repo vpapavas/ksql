@@ -1,9 +1,11 @@
 package io.confluent.ksql.execution.streams;
 
+import static io.confluent.ksql.GenericRow.genericRow;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +19,7 @@ import io.confluent.ksql.execution.function.udaf.KudafAggregator;
 import io.confluent.ksql.execution.function.udaf.KudafInitializer;
 import io.confluent.ksql.execution.function.udaf.KudafUndoAggregator;
 import io.confluent.ksql.execution.streams.AggregateParamsFactory.KudafAggregatorFactory;
+import io.confluent.ksql.execution.streams.AggregateParamsFactory.KudafUndoAggregatorFactory;
 import io.confluent.ksql.execution.transform.KsqlProcessingContext;
 import io.confluent.ksql.execution.transform.KsqlTransformer;
 import io.confluent.ksql.execution.transform.window.WindowSelectMapper;
@@ -24,11 +27,12 @@ import io.confluent.ksql.function.FunctionRegistry;
 import io.confluent.ksql.function.KsqlAggregateFunction;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.name.FunctionName;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
+import io.confluent.ksql.util.SchemaUtil;
 import java.util.List;
 import java.util.Optional;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Before;
@@ -47,27 +51,27 @@ public class AggregateParamsFactoryTest {
       .valueColumn(ColumnName.of("ARGUMENT1"), SqlTypes.DOUBLE)
       .build();
 
-  private static final List<ColumnRef> NON_AGG_COLUMNS = ImmutableList.of(
+  private static final List<ColumnName> NON_AGG_COLUMNS = ImmutableList.of(
       INPUT_SCHEMA.value().get(0).ref(),
       INPUT_SCHEMA.value().get(2).ref()
   );
 
   private static final FunctionCall AGG0 = new FunctionCall(
       FunctionName.of("AGG0"),
-      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("ARGUMENT0"))))
+      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnName.of("ARGUMENT0")))
   );
   private static final long INITIAL_VALUE0 = 123;
   private static final FunctionCall AGG1 = new FunctionCall(
       FunctionName.of("AGG1"),
-      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("ARGUMENT1"))))
+      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnName.of("ARGUMENT1")))
   );
   private static final FunctionCall TABLE_AGG = new FunctionCall(
       FunctionName.of("TABLE_AGG"),
-      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("ARGUMENT0"))))
+      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnName.of("ARGUMENT0")))
   );
   private static final FunctionCall WINDOW_START = new FunctionCall(
       FunctionName.of("WindowStart"),
-      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("ARGUMENT0"))))
+      ImmutableList.of(new UnqualifiedColumnReferenceExp(ColumnName.of("ARGUMENT0")))
   );
   private static final String INITIAL_VALUE1 = "initial";
   private static final List<FunctionCall> FUNCTIONS = ImmutableList.of(AGG0, AGG1);
@@ -85,7 +89,11 @@ public class AggregateParamsFactoryTest {
   @Mock
   private KudafAggregatorFactory udafFactory;
   @Mock
+  private KudafUndoAggregatorFactory undoUdafFactory;
+  @Mock
   private KudafAggregator aggregator;
+  @Mock
+  private KudafUndoAggregator undoAggregator;
   @Mock
   private KsqlProcessingContext ctx;
 
@@ -119,23 +127,36 @@ public class AggregateParamsFactoryTest {
     when(windowStart.returnType()).thenReturn(SqlTypes.BIGINT);
     when(windowStart.getAggregateType()).thenReturn(SqlTypes.BIGINT);
 
-    when(udafFactory.create(any(), any())).thenReturn(aggregator);
+    when(udafFactory.create(anyInt(), any())).thenReturn(aggregator);
+    when(undoUdafFactory.create(anyInt(), any())).thenReturn(undoAggregator);
 
-    aggregateParams = new AggregateParamsFactory(udafFactory).create(
+    aggregateParams = new AggregateParamsFactory(udafFactory, undoUdafFactory).create(
         INPUT_SCHEMA,
         NON_AGG_COLUMNS,
         functionRegistry,
-        FUNCTIONS
+        FUNCTIONS,
+        false
     );
   }
 
   @SuppressWarnings("unchecked")
   @Test
   public void shouldCreateAggregatorWithCorrectParams() {
-    verify(udafFactory).create(
-        ImmutableList.of(0, 2),
-         ImmutableList.of(agg0, agg1)
+    verify(udafFactory).create(2, ImmutableList.of(agg0, agg1));
+  }
+
+  @Test
+  public void shouldCreateUndoAggregatorWithCorrectParams() {
+    // When:
+    aggregateParams = new AggregateParamsFactory(udafFactory, undoUdafFactory).createUndoable(
+        INPUT_SCHEMA,
+        NON_AGG_COLUMNS,
+        functionRegistry,
+        ImmutableList.of(TABLE_AGG)
     );
+
+    // Then:
+    verify(undoUdafFactory).create(2, ImmutableList.of(tableAgg));
   }
 
   @Test
@@ -155,7 +176,7 @@ public class AggregateParamsFactoryTest {
     // Then:
     assertThat(
         initializer.apply(),
-        equalTo(new GenericRow(null, null, INITIAL_VALUE0, INITIAL_VALUE1))
+        equalTo(genericRow(null, null, INITIAL_VALUE0, INITIAL_VALUE1))
     );
   }
 
@@ -171,7 +192,7 @@ public class AggregateParamsFactoryTest {
   @Test
   public void shouldReturnUndoAggregator() {
     // Given:
-    aggregateParams = new AggregateParamsFactory(udafFactory).createUndoable(
+    aggregateParams = new AggregateParamsFactory(udafFactory, undoUdafFactory).createUndoable(
         INPUT_SCHEMA,
         NON_AGG_COLUMNS,
         functionRegistry,
@@ -182,11 +203,7 @@ public class AggregateParamsFactoryTest {
     final KudafUndoAggregator undoAggregator = aggregateParams.getUndoAggregator().get();
 
     // Then:
-    assertThat(undoAggregator.getNonAggColumnIndexes(), equalTo(ImmutableList.of(0, 2)));
-    assertThat(
-        undoAggregator.getAggregateFunctions(),
-        equalTo(ImmutableList.of(tableAgg))
-    );
+    assertThat(undoAggregator, is(undoAggregator));
   }
 
   @Test
@@ -201,24 +218,25 @@ public class AggregateParamsFactoryTest {
   @Test
   public void shouldReturnCorrectWindowSelectMapperForWindowSelections() {
     // Given:
-    aggregateParams = new AggregateParamsFactory(udafFactory).create(
+    aggregateParams = new AggregateParamsFactory(udafFactory, undoUdafFactory).create(
         INPUT_SCHEMA,
         NON_AGG_COLUMNS,
         functionRegistry,
-        ImmutableList.of(WINDOW_START)
+        ImmutableList.of(WINDOW_START),
+        false
     );
 
     // When:
-    final KsqlTransformer<Windowed<Object>, GenericRow> windowSelectMapper =
+    final KsqlTransformer<Windowed<Struct>, GenericRow> windowSelectMapper =
         aggregateParams
             .getWindowSelectMapper()
             .getTransformer();
 
     // Then:
-    final Windowed<Object> window = new Windowed<>(null, new TimeWindow(10, 20));
+    final Windowed<Struct> window = new Windowed<>(null, new TimeWindow(10, 20));
     assertThat(
-        windowSelectMapper.transform(window, new GenericRow("fiz", "baz", null), ctx),
-        equalTo(new GenericRow("fiz", "baz", 10))
+        windowSelectMapper.transform(window, genericRow("fiz", "baz", null), ctx),
+        equalTo(genericRow("fiz", "baz", 10L))
     );
   }
 
@@ -257,6 +275,37 @@ public class AggregateParamsFactoryTest {
                 .valueColumn(ColumnName.of("REQUIRED1"), SqlTypes.STRING)
                 .valueColumn(ColumnName.aggregateColumn(0), SqlTypes.INTEGER)
                 .valueColumn(ColumnName.aggregateColumn(1), SqlTypes.STRING)
+                .build()
+        )
+    );
+  }
+
+  @Test
+  public void shouldReturnCorrectWindowedSchema() {
+    // Given:
+    aggregateParams = new AggregateParamsFactory(udafFactory, undoUdafFactory).create(
+        INPUT_SCHEMA,
+        NON_AGG_COLUMNS,
+        functionRegistry,
+        FUNCTIONS,
+        true
+    );
+
+    // When:
+    final LogicalSchema schema = aggregateParams.getSchema();
+
+    // Then:
+    assertThat(
+        schema,
+        equalTo(
+            LogicalSchema.builder()
+                .keyColumns(INPUT_SCHEMA.key())
+                .valueColumn(ColumnName.of("REQUIRED0"), SqlTypes.BIGINT)
+                .valueColumn(ColumnName.of("REQUIRED1"), SqlTypes.STRING)
+                .valueColumn(ColumnName.aggregateColumn(0), SqlTypes.INTEGER)
+                .valueColumn(ColumnName.aggregateColumn(1), SqlTypes.STRING)
+                .valueColumn(SchemaUtil.WINDOWSTART_NAME, SchemaUtil.WINDOWBOUND_TYPE)
+                .valueColumn(SchemaUtil.WINDOWEND_NAME, SchemaUtil.WINDOWBOUND_TYPE)
                 .build()
         )
     );

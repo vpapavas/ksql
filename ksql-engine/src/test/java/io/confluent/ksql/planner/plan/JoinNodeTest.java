@@ -48,10 +48,9 @@ import io.confluent.ksql.parser.tree.WithinExpression;
 import io.confluent.ksql.planner.plan.JoinNode.JoinType;
 import io.confluent.ksql.query.QueryId;
 import io.confluent.ksql.schema.ksql.Column;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.serde.FormatInfo;
 import io.confluent.ksql.serde.ValueFormat;
 import io.confluent.ksql.services.KafkaTopicClient;
@@ -113,15 +112,13 @@ public class JoinNodeTest {
       RIGHT_ALIAS, RIGHT_SOURCE_SCHEMA.withMetaAndKeyColsInValue(false)
   );
 
-  private static final Optional<ColumnRef> NO_KEY_FIELD = Optional.empty();
-  private static final ValueFormat VALUE_FORMAT = ValueFormat.of(FormatInfo.of(Format.JSON));
-  private static final ValueFormat OTHER_FORMAT = ValueFormat.of(FormatInfo.of(Format.DELIMITED));
+  private static final ValueFormat VALUE_FORMAT = ValueFormat.of(FormatInfo.of(FormatFactory.JSON.name()));
+  private static final ValueFormat OTHER_FORMAT = ValueFormat.of(FormatInfo.of(FormatFactory.DELIMITED.name()));
   private final KsqlConfig ksqlConfig = new KsqlConfig(new HashMap<>());
   private StreamsBuilder builder;
   private JoinNode joinNode;
 
-  private static final ColumnRef LEFT_JOIN_FIELD_REF = ColumnRef.of(ColumnName.of("C0"));
-  private static final ColumnRef RIGHT_JOIN_FIELD_REF = ColumnRef.of(ColumnName.of("R1"));
+  private static final ColumnName LEFT_JOIN_FIELD_REF = ColumnName.of("C0");
 
   private static final KeyField leftJoinField = KeyField.of(LEFT_JOIN_FIELD_REF);
 
@@ -136,9 +133,9 @@ public class JoinNodeTest {
   public final ExpectedException expectedException = ExpectedException.none();
 
   @Mock
-  private DataSource<?> leftSource;
+  private DataSource leftSource;
   @Mock
-  private DataSource<?> rightSource;
+  private DataSource rightSource;
   @Mock
   private DataSourceNode left;
   @Mock
@@ -650,14 +647,14 @@ public class JoinNodeTest {
     // When:
     assertThat(joinNode.getSchema(), is(LogicalSchema.builder()
         .keyColumn(SchemaUtil.ROWKEY_NAME, SqlTypes.BIGINT)
-        .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "ROWTIME"), SqlTypes.BIGINT)
-        .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "ROWKEY"), SqlTypes.BIGINT)
         .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "C0"), SqlTypes.BIGINT)
         .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "L1"), SqlTypes.STRING)
-        .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "ROWTIME"), SqlTypes.BIGINT)
-        .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "ROWKEY"), SqlTypes.BIGINT)
+        .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "ROWTIME"), SqlTypes.BIGINT)
+        .valueColumn(ColumnName.of(LEFT_ALIAS.name() + "_" + "ROWKEY"), SqlTypes.BIGINT)
         .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "C0"), SqlTypes.STRING)
         .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "R1"), SqlTypes.BIGINT)
+        .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "ROWTIME"), SqlTypes.BIGINT)
+        .valueColumn(ColumnName.of(RIGHT_ALIAS.name() + "_" + "ROWKEY"), SqlTypes.BIGINT)
         .build()
     ));
   }
@@ -782,15 +779,15 @@ public class JoinNodeTest {
         .findFirst();
   }
 
-  private static ColumnRef getNonKeyColumn(
+  private static ColumnName getNonKeyColumn(
       final LogicalSchema schema,
       final SourceName alias,
-      final ColumnRef keyName
+      final ColumnName keyName
   ) {
     final ImmutableList<ColumnName> blackList = ImmutableList.of(
         SchemaUtil.ROWKEY_NAME,
         SchemaUtil.ROWTIME_NAME,
-        keyName.name()
+        keyName
     );
 
     final Column column =
@@ -798,17 +795,16 @@ public class JoinNodeTest {
             .orElseThrow(AssertionError::new);
 
     final Column field = schema.findValueColumn(column.ref()).get();
-    return ColumnRef.of(field.name());
+    return field.name();
   }
 
-  @SuppressWarnings("unchecked")
   private static void setUpSource(
       final DataSourceNode node,
       final ValueFormat valueFormat,
-      final DataSource<?> dataSource,
+      final DataSource dataSource,
       final String name
   ) {
-    when(node.getDataSource()).thenReturn((DataSource)dataSource);
+    when(node.getDataSource()).thenReturn(dataSource);
 
     final KsqlTopic ksqlTopic = mock(KsqlTopic.class);
     when(ksqlTopic.getValueFormat()).thenReturn(valueFormat);

@@ -15,6 +15,7 @@
 
 package io.confluent.ksql.execution.transform.window;
 
+import static io.confluent.ksql.GenericRow.genericRow;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
@@ -24,10 +25,11 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.execution.transform.KsqlProcessingContext;
 import io.confluent.ksql.execution.transform.KsqlTransformer;
+import io.confluent.ksql.execution.util.StructKeyUtil;
 import io.confluent.ksql.function.KsqlAggregateFunction;
 import io.confluent.ksql.name.FunctionName;
-import java.util.ArrayList;
-import java.util.Arrays;
+import io.confluent.ksql.schema.ksql.types.SqlTypes;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -39,6 +41,9 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class WindowSelectMapperTest {
+
+  private static final Struct A_KEY = StructKeyUtil.keyBuilder(SqlTypes.STRING)
+      .build("key");
 
   @Mock
   private KsqlAggregateFunction<?, ?, ?> windowStartFunc;
@@ -77,34 +82,34 @@ public class WindowSelectMapperTest {
   @Test
   public void shouldUpdateRowWithWindowBounds() {
     // Given:
-    final KsqlTransformer<Windowed<Object>, GenericRow> mapper = new WindowSelectMapper(
+    final KsqlTransformer<Windowed<Struct>, GenericRow> mapper = new WindowSelectMapper(
         1,
         ImmutableList.of(otherFunc, windowStartFunc, windowEndFunc, windowStartFunc)
     ).getTransformer();
 
     final Window window = new SessionWindow(12345L, 54321L);
-    final GenericRow row = new GenericRow(Arrays.asList(0, 1, 2, 3, 4, 5));
+    final GenericRow row = genericRow(0, 1, 2, 3, 4, 5);
 
     // When:
-    final GenericRow result = mapper.transform(new Windowed<>("k", window), row, ctx);
+    final GenericRow result = mapper.transform(new Windowed<>(A_KEY, window), row, ctx);
 
     // Then:
     assertThat(result, is(sameInstance(row)));
-    assertThat(row.getColumns(), is(ImmutableList.of(0, 1, 12345L, 54321L, 12345L, 5)));
+    assertThat(row.values(), is(ImmutableList.of(0, 1, 12345L, 54321L, 12345L, 5)));
   }
 
   @Test(expected = IndexOutOfBoundsException.class)
   public void shouldThrowIfRowNotBigEnough() {
     // Given:
-    final KsqlTransformer<Windowed<Object>, GenericRow> mapper = new WindowSelectMapper(
+    final KsqlTransformer<Windowed<Struct>, GenericRow> mapper = new WindowSelectMapper(
         0,
         ImmutableList.of(windowStartFunc)
     ).getTransformer();
 
     final Window window = new SessionWindow(12345L, 54321L);
-    final GenericRow row = new GenericRow(new ArrayList<>());
+    final GenericRow row = genericRow();
 
     // When:
-    mapper.transform(new Windowed<>("k", window), row, ctx);
+    mapper.transform(new Windowed<>(A_KEY, window), row, ctx);
   }
 }

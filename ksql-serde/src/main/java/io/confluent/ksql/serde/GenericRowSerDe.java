@@ -28,7 +28,6 @@ import io.confluent.ksql.logging.processing.ProcessingLogger;
 import io.confluent.ksql.schema.ksql.PersistenceSchema;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.SchemaUtil;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +43,25 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
 public final class GenericRowSerDe implements ValueSerdeFactory {
+
+  /**
+   * Additional capacity added to each created `GenericRow` in an attempt to avoid later resizes,
+   * and associated array copies, when the row has additional elements appended to the end during
+   * processing, e.g. to match columns added by
+   * {@link io.confluent.ksql.schema.ksql.LogicalSchema#withMetaAndKeyColsInValue(boolean)}
+   *
+   * <p>The number is optimised for a single key column, as this is the most common case.
+   *
+   * <p>Count covers the following additional columns:
+   * <ol>
+   *   <li>{@link SchemaUtil#ROWTIME_NAME}</li>
+   *   <li>{@link SchemaUtil#ROWKEY_NAME}</li>
+   *   <li>{@link SchemaUtil#WINDOWSTART_NAME}</li>
+   *   <li>{@link SchemaUtil#WINDOWEND_NAME}</li>
+   * </ol>
+   *
+   */
+  private static final int ADDITIONAL_CAPACITY = 4;
 
   private final SerdeFactories serdeFactories;
 
@@ -191,12 +209,12 @@ public final class GenericRowSerDe implements ValueSerdeFactory {
         return inner.serialize(topic, null);
       }
 
-      if (data.getColumns().size() != 1) {
+      if (data.size() != 1) {
         throw new SerializationException("Expected single-field value. "
-            + "got: " + data.getColumns().size());
+            + "got: " + data.size());
       }
 
-      final Object singleField = data.getColumns().get(0);
+      final Object singleField = data.get(0);
       return inner.serialize(topic, (K) singleField);
     }
   }
@@ -221,8 +239,8 @@ public final class GenericRowSerDe implements ValueSerdeFactory {
         return null;
       }
 
-      final GenericRow row = new GenericRow();
-      row.getColumns().add(value);
+      final GenericRow row = new GenericRow(1 + ADDITIONAL_CAPACITY);
+      row.append(value);
       return row;
     }
   }
@@ -248,16 +266,16 @@ public final class GenericRowSerDe implements ValueSerdeFactory {
         return inner.serialize(topic, null);
       }
 
-      if (data.getColumns().size() != schema.fields().size()) {
+      if (data.size() != schema.fields().size()) {
         throw new SerializationException("Field count mismatch."
             + " expected: " + schema.fields().size()
-            + ", got: " + data.getColumns().size()
+            + ", got: " + data.size()
         );
       }
 
       final Struct struct = new Struct(schema);
-      for (int i = 0; i < data.getColumns().size(); i++) {
-        struct.put(schema.fields().get(i), data.getColumns().get(i));
+      for (int i = 0; i < data.size(); i++) {
+        struct.put(schema.fields().get(i), data.get(i));
       }
 
       return inner.serialize(topic, struct);
@@ -285,14 +303,15 @@ public final class GenericRowSerDe implements ValueSerdeFactory {
       }
 
       final List<Field> fields = struct.schema().fields();
-      final List<Object> columns = new ArrayList<>(fields.size());
+
+      final GenericRow row = new GenericRow(fields.size() + ADDITIONAL_CAPACITY);
 
       for (final Field field : fields) {
         final Object columnVal = struct.get(field);
-        columns.add(columnVal);
+        row.append(columnVal);
       }
 
-      return new GenericRow(columns);
+      return row;
     }
   }
 }

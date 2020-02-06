@@ -19,8 +19,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 
+import io.confluent.ksql.engine.KsqlEngine;
 import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.server.HeartbeatAgent;
+import java.util.Optional;
 import javax.ws.rs.core.Response;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,12 +35,17 @@ public class ClusterStatusResourceTest {
 
   @Mock
   private HeartbeatAgent heartbeatAgent;
+  @Mock
+  private KsqlEngine ksqlEngine;
 
   private ClusterStatusResource clusterStatusResource;
 
   @Before
   public void setUp() {
-    clusterStatusResource = new ClusterStatusResource(heartbeatAgent);
+    clusterStatusResource = new ClusterStatusResource(
+        ksqlEngine,
+        heartbeatAgent,
+        Optional.empty());
   }
 
   @Test

@@ -15,6 +15,10 @@
 
 package io.confluent.ksql.schema.ksql;
 
+import static io.confluent.ksql.util.SchemaUtil.WINDOWBOUND_TYPE;
+import static io.confluent.ksql.util.SchemaUtil.WINDOWEND_NAME;
+import static io.confluent.ksql.util.SchemaUtil.WINDOWSTART_NAME;
+
 import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import io.confluent.ksql.name.ColumnName;
@@ -102,21 +106,33 @@ public final class LogicalSchema {
   /**
    * Search for a column with the supplied {@code columnRef}.
    *
-   * @param columnRef the column source and name to match.
+   * @param columnName the column source and name to match.
    * @return the column if found, else {@code Optional.empty()}.
    */
-  public Optional<Column> findColumn(final ColumnRef columnRef) {
-    return findColumnMatching(withRef(columnRef));
+  public Optional<Column> findColumn(final ColumnName columnName) {
+    return findColumnMatching(withRef(columnName));
   }
 
   /**
    * Search for a value column with the supplied {@code columnRef}.
    *
-   * @param columnRef the column source and name to match.
+   * @param columnName the column source and name to match.
    * @return the value column if found, else {@code Optional.empty()}.
    */
-  public Optional<Column> findValueColumn(final ColumnRef columnRef) {
-    return findColumnMatching(withNamespace(Namespace.VALUE).and(withRef(columnRef)));
+  public Optional<Column> findValueColumn(final ColumnName columnName) {
+    return findColumnMatching(withNamespace(Namespace.VALUE).and(withRef(columnName)));
+  }
+
+  /**
+   * Checks to see if value namespace contain any of the supplied names.
+   *
+   * @param names the names to check for.
+   * @return {@code true} if <i>any</i> of the supplied names exist in the value namespace.
+   */
+  public boolean valueContainsAny(final Set<ColumnName> names) {
+    return value().stream()
+        .map(Column::name)
+        .anyMatch(names::contains);
   }
 
   /**
@@ -124,9 +140,8 @@ public final class LogicalSchema {
    *
    * <p>If the columns already exist in the value schema the function returns the same schema.
    *
-   * @param windowed indicates that the source is windowed; meaning key column copied to
-   *     value will be of type {@link SqlTypes#STRING}, inline with how {@code SourceBuilder}
-   *     creates a {@code String} {@code ROWKEY} for windowed sources.
+   * @param windowed indicates that the source is windowed; meaning {@code WINDOWSTART} and {@code
+   * WINDOWEND} columns will added to the value schema to represent the window bounds.
    * @return the new schema.
    */
   public LogicalSchema withMetaAndKeyColsInValue(final boolean windowed) {
@@ -227,21 +242,15 @@ public final class LogicalSchema {
     builder.addAll(key);
 
     int valueIndex = 0;
-    if (withMetaAndKeyColsInValue) {
-      for (final Column c : metadata) {
-        builder.add(Column.of(c.name(), c.type(), Namespace.VALUE, valueIndex++));
-      }
-
-      for (final Column c : key) {
-        final SqlType type = windowedKey ? SqlTypes.STRING : c.type();
-        builder.add(Column.of(c.name(), type, Namespace.VALUE, valueIndex++));
-      }
-    }
-
     for (final Column c : value) {
+      if (c.name().equals(WINDOWSTART_NAME)
+          || c.name().equals(WINDOWEND_NAME)
+      ) {
+        continue;
+      }
+
       if (findColumnMatching(
-          (withNamespace(Namespace.META).or(withNamespace(Namespace.KEY))
-              .and(withRef(c.ref()))
+          (withNamespace(Namespace.META).or(withNamespace(Namespace.KEY)).and(withRef(c.ref()))
           )).isPresent()) {
         continue;
       }
@@ -249,10 +258,27 @@ public final class LogicalSchema {
       builder.add(Column.of(c.name(), c.type(), Namespace.VALUE, valueIndex++));
     }
 
+    if (withMetaAndKeyColsInValue) {
+      for (final Column c : metadata) {
+        builder.add(Column.of(c.name(), c.type(), Namespace.VALUE, valueIndex++));
+      }
+
+      for (final Column c : key) {
+        builder.add(Column.of(c.name(), c.type(), Namespace.VALUE, valueIndex++));
+      }
+
+      if (windowedKey) {
+        builder.add(
+            Column.of(WINDOWSTART_NAME, WINDOWBOUND_TYPE, Namespace.VALUE, valueIndex++));
+        builder.add(
+            Column.of(WINDOWEND_NAME, WINDOWBOUND_TYPE, Namespace.VALUE, valueIndex));
+      }
+    }
+
     return new LogicalSchema(builder.build());
   }
 
-  private static Predicate<Column> withRef(final ColumnRef ref) {
+  private static Predicate<Column> withRef(final ColumnName ref) {
     return c -> c.ref().equals(ref);
   }
 
@@ -272,7 +298,7 @@ public final class LogicalSchema {
     final SchemaBuilder builder = SchemaBuilder.struct();
     for (final Column column : columns) {
       final Schema colSchema = converter.toConnectSchema(column.type());
-      builder.field(column.ref().aliasedFieldName(), colSchema);
+      builder.field(column.ref().name(), colSchema);
     }
 
     return (ConnectSchema) builder.build();
@@ -282,8 +308,8 @@ public final class LogicalSchema {
 
     private final ImmutableList.Builder<Column> explicitColumns = ImmutableList.builder();
 
-    private final Set<ColumnRef> seenKeys = new HashSet<>();
-    private final Set<ColumnRef> seenValues = new HashSet<>();
+    private final Set<ColumnName> seenKeys = new HashSet<>();
+    private final Set<ColumnName> seenValues = new HashSet<>();
 
     private boolean addImplicitRowKey = true;
     private boolean addImplicitRowTime = true;
@@ -305,7 +331,7 @@ public final class LogicalSchema {
     }
 
     public Builder keyColumn(final SimpleColumn col) {
-      return keyColumn(col.ref().name(), col.type());
+      return keyColumn(col.ref(), col.type());
     }
 
     public Builder valueColumns(final Iterable<? extends SimpleColumn> column) {
@@ -314,7 +340,7 @@ public final class LogicalSchema {
     }
 
     public Builder valueColumn(final SimpleColumn col) {
-      return valueColumn(col.ref().name(), col.type());
+      return valueColumn(col.ref(), col.type());
     }
 
     public Builder valueColumn(final ColumnName name, final SqlType type) {

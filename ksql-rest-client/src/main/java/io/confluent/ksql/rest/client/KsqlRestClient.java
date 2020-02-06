@@ -24,8 +24,9 @@ import io.confluent.ksql.rest.entity.ClusterStatusResponse;
 import io.confluent.ksql.rest.entity.CommandStatus;
 import io.confluent.ksql.rest.entity.CommandStatuses;
 import io.confluent.ksql.rest.entity.HealthCheckResponse;
-import io.confluent.ksql.rest.entity.HostInfoEntity;
 import io.confluent.ksql.rest.entity.KsqlEntityList;
+import io.confluent.ksql.rest.entity.KsqlHostInfoEntity;
+import io.confluent.ksql.rest.entity.LagReportingMessage;
 import io.confluent.ksql.rest.entity.ServerInfo;
 import java.io.Closeable;
 import java.io.InputStream;
@@ -91,7 +92,7 @@ public class KsqlRestClient implements Closeable {
   }
 
   public Future<Response> makeAsyncHeartbeatRequest(
-      final HostInfoEntity host,
+      final KsqlHostInfoEntity host,
       final long timestamp
   ) {
     return target().postAsyncHeartbeatRequest(host, timestamp);
@@ -99,6 +100,12 @@ public class KsqlRestClient implements Closeable {
 
   public RestResponse<ClusterStatusResponse> makeClusterStatusRequest() {
     return target().getClusterStatus();
+  }
+
+  public Future<Response> makeAsyncLagReportingRequest(
+      final LagReportingMessage lagReportingMessage
+  ) {
+    return target().postAsyncLagReportingRequest(lagReportingMessage);
   }
 
   public RestResponse<KsqlEntityList> makeKsqlRequest(final String ksql) {
@@ -119,6 +126,15 @@ public class KsqlRestClient implements Closeable {
 
   public RestResponse<QueryStream> makeQueryRequest(final String ksql, final Long commandSeqNum) {
     return target().postQueryRequest(ksql, Optional.ofNullable(commandSeqNum));
+  }
+
+  public RestResponse<QueryStream> makeQueryRequest(final String ksql,
+      final Long commandSeqNum, final Map<String, ?> properties) {
+    KsqlTarget target = target();
+    if (properties != null) {
+      target = target.properties(properties);
+    }
+    return target.postQueryRequest(ksql, Optional.ofNullable(commandSeqNum));
   }
 
   public RestResponse<InputStream> makePrintTopicRequest(

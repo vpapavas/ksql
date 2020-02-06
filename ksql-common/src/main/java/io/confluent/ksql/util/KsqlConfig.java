@@ -20,8 +20,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.ksql.config.ConfigItem;
 import io.confluent.ksql.config.KsqlConfigResolver;
+import io.confluent.ksql.configdef.ConfigValidators;
 import io.confluent.ksql.errors.LogMetricAndContinueExceptionHandler;
 import io.confluent.ksql.errors.ProductionExceptionHandlerUtil;
+import io.confluent.ksql.logging.processing.ProcessingLogConfig;
 import io.confluent.ksql.model.SemanticVersion;
 import io.confluent.ksql.testing.EffectivelyImmutable;
 import java.util.Collection;
@@ -165,11 +167,28 @@ public class KsqlConfig extends AbstractConfig {
       "Config to enable or disable transient pull queries on a specific KSQL server.";
   public static final boolean KSQL_QUERY_PULL_ENABLE_DEFAULT = true;
 
-  public static final String KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_CONFIG =
-      "ksql.query.pull.routing.timeout.ms";
-  public static final Long KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_DEFAULT = 30000L;
-  public static final String KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_DOC = "Timeout in milliseconds "
-      + "when waiting for the lookup of the owner of a row key";
+  public static final String KSQL_QUERY_PULL_ENABLE_STANDBY_READS =
+        "ksql.query.pull.enable.stale.reads";
+  private static final String KSQL_QUERY_PULL_ENABLE_STANDBY_READS_DOC =
+      "Config to enable/disable forwarding pull queries to standby hosts when the active is dead. "
+          + "This means that stale values may be returned for these queries since standby hosts"
+          + "receive updates from the changelog topic (to which the active writes to) "
+          + "asynchronously. Turning on this configuration, effectively sacrifices "
+          + "consistency for higher availability.  "
+          + "Possible values are \"true\", \"false\". Setting to \"true\" guarantees high "
+          + "availability for pull queries. If set to \"false\", pull queries will fail when"
+          + "the active is dead and until a new active is elected. Default value is \"false\". "
+          + "For using this functionality, the server must be configured with "
+          + "to ksql.streams.num.standby.replicas >= 1";
+  public static final boolean KSQL_QUERY_PULL_ENABLE_STANDBY_READS_DEFAULT = false;
+
+  public static final String KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_CONFIG =
+      "ksql.query.pull.stale.reads.lag.max.offsets";
+  public static final Long KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_DEFAULT = 0L;
+  private static final String KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_DOC =
+      "Controls the maximum lag tolerated by a pull query against a table. This is applied to all "
+          + "hosts storing it, both active and standbys included. Only enabled when "
+          + "lag.reporting.enable is true. By default, no lag is is allowed.";
 
   public static final String KSQL_QUERY_PULL_STREAMSTORE_REBALANCING_TIMEOUT_MS_CONFIG =
       "ksql.query.pull.streamsstore.rebalancing.timeout.ms";
@@ -201,6 +220,36 @@ public class KsqlConfig extends AbstractConfig {
   public static final Long KSQL_AUTH_CACHE_MAX_ENTRIES_DEFAULT = 10000L;
   public static final String KSQL_AUTH_CACHE_MAX_ENTRIES_DOC = "Controls the size of the cache "
       + "to a maximum number of KSQL authorization responses entries.";
+
+  public static final String KSQL_HIDDEN_TOPICS_CONFIG = "ksql.hidden.topics";
+  public static final String KSQL_HIDDEN_TOPICS_DEFAULT = "_confluent.*,__confluent.*"
+      + ",_schemas,__consumer_offsets,__transaction_state,connect-configs,connect-offsets,"
+      + "connect-status,connect-statuses";
+  public static final String KSQL_HIDDEN_TOPICS_DOC = "Comma-separated list of topics that will "
+      + "be hidden. Entries in the list may be literal topic names or "
+      + "[Java regular expressions](https://docs.oracle.com/javase/8/docs/api/java/util/regex/"
+      + "Pattern.html). "
+      + "For example, `_confluent.*` will match any topic whose name starts with the `_confluent`)."
+      + "\nHidden topics will not visible when running the `SHOW TOPICS` command unless "
+      + "`SHOW ALL TOPICS` is used."
+      + "\nThe default value hides known system topics from Kafka and Confluent products."
+      + "\nKSQL also marks its own internal topics as hidden. This is not controlled by this "
+      + "config.";
+
+  public static final String KSQL_READONLY_TOPICS_CONFIG = "ksql.readonly.topics";
+  public static final String KSQL_READONLY_TOPICS_DEFAULT = "_confluent.*,__confluent.*"
+      + ",_schemas,__consumer_offsets,__transaction_state,connect-configs,connect-offsets,"
+      + "connect-status,connect-statuses";
+  public static final String KSQL_READONLY_TOPICS_DOC = "Comma-separated list of topics that "
+      + "should be marked as read-only. Entries in the list may be literal topic names or "
+      + "[Java regular expressions](https://docs.oracle.com/javase/8/docs/api/java/util/regex/"
+      + "Pattern.html). "
+      + "For example, `_confluent.*` will match any topic whose name starts with the `_confluent`)."
+      + "\nRead-only topics cannot be modified by any KSQL command."
+      + "\nThe default value marks known system topics from Kafka and Confluent products as "
+      + "read-only."
+      + "\nKSQL also marks its own internal topics as read-only. This is not controlled by this "
+      + "config.";
 
   private enum ConfigGeneration {
     LEGACY,
@@ -485,11 +534,17 @@ public class KsqlConfig extends AbstractConfig {
             Importance.LOW,
             KSQL_QUERY_PULL_ENABLE_DOC
         ).define(
-            KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_CONFIG,
-            ConfigDef.Type.LONG,
-            KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_DEFAULT,
-            Importance.LOW,
-            KSQL_QUERY_PULL_ROUTING_TIMEOUT_MS_DOC
+            KSQL_QUERY_PULL_ENABLE_STANDBY_READS,
+            Type.BOOLEAN,
+            KSQL_QUERY_PULL_ENABLE_STANDBY_READS_DEFAULT,
+            Importance.MEDIUM,
+            KSQL_QUERY_PULL_ENABLE_STANDBY_READS_DOC
+        ).define(
+            KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_CONFIG,
+            Type.LONG,
+            KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_DEFAULT,
+            Importance.MEDIUM,
+            KSQL_QUERY_PULL_STALE_READS_LAG_MAX_OFFSETS_DOC
         ).define(
             KSQL_QUERY_PULL_STREAMSTORE_REBALANCING_TIMEOUT_MS_CONFIG,
             ConfigDef.Type.LONG,
@@ -532,6 +587,20 @@ public class KsqlConfig extends AbstractConfig {
             KSQL_AUTH_CACHE_MAX_ENTRIES_DEFAULT,
             Importance.LOW,
             KSQL_AUTH_CACHE_MAX_ENTRIES_DOC
+        ).define(
+            KSQL_HIDDEN_TOPICS_CONFIG,
+            Type.LIST,
+            KSQL_HIDDEN_TOPICS_DEFAULT,
+            ConfigValidators.validRegex(),
+            Importance.LOW,
+            KSQL_HIDDEN_TOPICS_DOC
+        ).define(
+            KSQL_READONLY_TOPICS_CONFIG,
+            Type.LIST,
+            KSQL_READONLY_TOPICS_DEFAULT,
+            ConfigValidators.validRegex(),
+            Importance.LOW,
+            KSQL_READONLY_TOPICS_DOC
         )
         .withClientSslSupport();
 
@@ -667,6 +736,10 @@ public class KsqlConfig extends AbstractConfig {
 
   public Map<String, Object> getProducerClientConfigProps() {
     return getConfigsFor(ProducerConfig.configNames());
+  }
+
+  public Map<String, Object> getProcessingLogConfigProps() {
+    return getConfigsFor(ProcessingLogConfig.configNames());
   }
 
   private Map<String, Object> getConfigsFor(final Set<String> configs) {

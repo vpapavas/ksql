@@ -15,6 +15,7 @@
 
 package io.confluent.ksql.rest.server.resources.streaming;
 
+import static io.confluent.ksql.GenericRow.genericRow;
 import static io.confluent.ksql.rest.Errors.ERROR_CODE_FORBIDDEN_KAFKA_ACCESS;
 import static io.confluent.ksql.rest.entity.KsqlErrorMessageMatchers.errorCode;
 import static io.confluent.ksql.rest.entity.KsqlErrorMessageMatchers.errorMessage;
@@ -35,11 +36,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.engine.KsqlEngine;
 import io.confluent.ksql.exception.KsqlTopicAuthorizationException;
+import io.confluent.ksql.execution.streams.RoutingFilter.RoutingFilterFactory;
 import io.confluent.ksql.json.JsonMapper;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
@@ -52,8 +55,10 @@ import io.confluent.ksql.rest.Errors;
 import io.confluent.ksql.rest.entity.KsqlErrorMessage;
 import io.confluent.ksql.rest.entity.KsqlRequest;
 import io.confluent.ksql.rest.entity.StreamedRow;
+import io.confluent.ksql.execution.streams.RoutingFilters;
 import io.confluent.ksql.rest.server.StatementParser;
 import io.confluent.ksql.rest.server.computation.CommandQueue;
+import io.confluent.ksql.rest.server.execution.PullQueryExecutor;
 import io.confluent.ksql.rest.server.resources.KsqlRestException;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
@@ -127,6 +132,10 @@ public class StreamedQueryResourceTest {
   private static final String PULL_QUERY_STRING = "SELECT * FROM " + TOPIC_NAME + " WHERE ROWKEY='null';";
   private static final String PRINT_TOPIC = "Print TEST_TOPIC;";
 
+  private static final RoutingFilterFactory ROUTING_FILTER_FACTORY =
+      (routingOptions, hosts, active, applicationQueryId, storeName, partition) ->
+          new RoutingFilters(ImmutableList.of());
+
   @Rule
   public final ExpectedException expectedException = ExpectedException.none();
 
@@ -148,11 +157,13 @@ public class StreamedQueryResourceTest {
   private KsqlAuthorizationValidator authorizationValidator;
   @Mock
   private Errors errorsHandler;
+
   private StreamedQueryResource testResource;
   private PreparedStatement<Statement> invalid;
   private PreparedStatement<Query> query;
   private PreparedStatement<PrintTopic> print;
   private KsqlSecurityContext securityContext;
+  private PullQueryExecutor pullQueryExecutor;
 
   @Before
   public void setup() {
@@ -169,6 +180,8 @@ public class StreamedQueryResourceTest {
 
     securityContext = new KsqlSecurityContext(Optional.empty(), serviceContext);
 
+    pullQueryExecutor = new PullQueryExecutor(
+        mockKsqlEngine, Optional.empty(), ROUTING_FILTER_FACTORY);
     testResource = new StreamedQueryResource(
         mockKsqlEngine,
         mockStatementParser,
@@ -177,7 +190,8 @@ public class StreamedQueryResourceTest {
         COMMAND_QUEUE_CATCHUP_TIMOEUT,
         activenessRegistrar,
         Optional.of(authorizationValidator),
-        errorsHandler
+        errorsHandler,
+        pullQueryExecutor
     );
 
     testResource.configure(VALID_CONFIG);
@@ -203,7 +217,8 @@ public class StreamedQueryResourceTest {
         COMMAND_QUEUE_CATCHUP_TIMOEUT,
         activenessRegistrar,
         Optional.of(authorizationValidator),
-        errorsHandler
+        errorsHandler,
+        pullQueryExecutor
     );
 
     // Then:
@@ -343,7 +358,7 @@ public class StreamedQueryResourceTest {
       try {
         for (int i = 0; i != NUM_ROWS; i++) {
           final String key = Integer.toString(i);
-          final GenericRow value = new GenericRow(Collections.singletonList(i));
+          final GenericRow value = genericRow(i);
           synchronized (writtenRows) {
             writtenRows.add(value);
           }

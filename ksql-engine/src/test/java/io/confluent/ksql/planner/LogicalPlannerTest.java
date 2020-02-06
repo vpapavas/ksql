@@ -38,7 +38,6 @@ import io.confluent.ksql.planner.plan.JoinNode;
 import io.confluent.ksql.planner.plan.PlanNode;
 import io.confluent.ksql.planner.plan.ProjectNode;
 import io.confluent.ksql.planner.plan.RepartitionNode;
-import io.confluent.ksql.schema.ksql.ColumnRef;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
 import io.confluent.ksql.testutils.AnalysisTestUtil;
 import io.confluent.ksql.util.KsqlConfig;
@@ -65,7 +64,7 @@ public class LogicalPlannerTest {
   public void shouldCreatePlanWithTableAsSource() {
     final PlanNode planNode = buildLogicalPlan("select col0 from TEST2 EMIT CHANGES limit 5;");
     assertThat(planNode.getSources().size(), equalTo(1));
-    final DataSource<?> dataSource = ((DataSourceNode) planNode
+    final DataSource dataSource = ((DataSourceNode) planNode
         .getSources()
         .get(0)
         .getSources()
@@ -141,7 +140,7 @@ public class LogicalPlannerTest {
   private static SelectExpression selectCol(final String column, final String alias) {
     return SelectExpression.of(
         ColumnName.of(alias),
-        new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of(column)))
+        new UnqualifiedColumnReferenceExp(ColumnName.of(column))
     );
   }
 
@@ -157,24 +156,24 @@ public class LogicalPlannerTest {
     final JoinNode joinNode = (JoinNode) logicalPlan.getSources().get(0).getSources().get(0);
     final ProjectNode left = (ProjectNode) joinNode.getSources().get(0);
     assertThat(left.getSelectExpressions(), contains(
-        selectCol("ROWTIME", "T1_ROWTIME"),
-        selectCol("ROWKEY", "T1_ROWKEY"),
         selectCol("COL0", "T1_COL0"),
         selectCol("COL1", "T1_COL1"),
         selectCol("COL2", "T1_COL2"),
         selectCol("COL3", "T1_COL3"),
         selectCol("COL4", "T1_COL4"),
-        selectCol("COL5", "T1_COL5")
+        selectCol("COL5", "T1_COL5"),
+        selectCol("ROWTIME", "T1_ROWTIME"),
+        selectCol("ROWKEY", "T1_ROWKEY")
     ));
     final ProjectNode right = (ProjectNode) joinNode.getSources().get(1);
     assertThat(right.getSelectExpressions(), contains(
-        selectCol("ROWTIME", "T2_ROWTIME"),
-        selectCol("ROWKEY", "T2_ROWKEY"),
         selectCol("COL0", "T2_COL0"),
         selectCol("COL1", "T2_COL1"),
         selectCol("COL2", "T2_COL2"),
         selectCol("COL3", "T2_COL3"),
-        selectCol("COL4", "T2_COL4")
+        selectCol("COL4", "T2_COL4"),
+        selectCol("ROWTIME", "T2_ROWTIME"),
+        selectCol("ROWKEY", "T2_ROWKEY")
     ));
   }
 
@@ -207,8 +206,8 @@ public class LogicalPlannerTest {
     assertThat(filter.getPredicate(), equalTo(
         new ComparisonExpression(
             Type.EQUAL,
-            new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("T1_COL1"))),
-            new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("T2_COL1"))))
+            new UnqualifiedColumnReferenceExp(ColumnName.of("T1_COL1")),
+            new UnqualifiedColumnReferenceExp(ColumnName.of("T2_COL1")))
     ));
   }
 
@@ -224,7 +223,7 @@ public class LogicalPlannerTest {
     final RepartitionNode repart = (RepartitionNode) logicalPlan.getSources().get(0).getSources().get(0);
     assertThat(
         repart.getPartitionBy(),
-        equalTo(new UnqualifiedColumnReferenceExp(ColumnRef.of(ColumnName.of("T1_COL1"))))
+        equalTo(new UnqualifiedColumnReferenceExp(ColumnName.of("T1_COL1")))
     );
   }
 
@@ -346,10 +345,10 @@ public class LogicalPlannerTest {
     final PlanNode logicalPlan = buildLogicalPlan(simpleQuery);
 
     // Then:
-    assertThat(logicalPlan.getKeyField().ref(), is(Optional.of(ColumnRef.of(ColumnName.of("NEW_KEY")))));
+    assertThat(logicalPlan.getKeyField().ref(), is(Optional.of(ColumnName.of("NEW_KEY"))));
 
     final PlanNode source = logicalPlan.getSources().get(0);
-    assertThat(source.getKeyField().ref(), is(Optional.of(ColumnRef.of(ColumnName.of("NEW_KEY")))));
+    assertThat(source.getKeyField().ref(), is(Optional.of(ColumnName.of("NEW_KEY"))));
   }
 
   private PlanNode buildLogicalPlan(final String query) {

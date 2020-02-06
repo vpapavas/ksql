@@ -15,6 +15,7 @@
 
 package io.confluent.ksql.benchmark;
 
+import com.google.common.collect.ImmutableMap;
 import io.confluent.avro.random.generator.Generator;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -22,16 +23,16 @@ import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.datagen.RowGenerator;
 import io.confluent.ksql.logging.processing.ProcessingLogContext;
 import io.confluent.ksql.schema.ksql.PersistenceSchema;
-import io.confluent.ksql.serde.Format;
+import io.confluent.ksql.serde.FormatFactory;
 import io.confluent.ksql.serde.FormatInfo;
 import io.confluent.ksql.serde.GenericRowSerDe;
+import io.confluent.ksql.serde.avro.AvroFormat;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.Pair;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -158,7 +159,7 @@ public class SerdeBenchmark {
         final org.apache.kafka.connect.data.Schema schema
     ) {
       return getGenericRowSerde(
-          FormatInfo.of(Format.JSON),
+          FormatInfo.of(FormatFactory.JSON.name()),
           schema,
           () -> null
       );
@@ -170,7 +171,9 @@ public class SerdeBenchmark {
       final SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
 
       return getGenericRowSerde(
-          FormatInfo.of(Format.AVRO, Optional.of("benchmarkSchema"), Optional.empty()),
+          FormatInfo.of(
+              FormatFactory.AVRO.name(),
+              ImmutableMap.of(AvroFormat.FULL_SCHEMA_NAME, "benchmarkSchema")),
           schema,
           () -> schemaRegistryClient
       );
