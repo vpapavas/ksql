@@ -237,10 +237,11 @@ public final class HeartbeatAgent {
         } else {
           final TreeMap<Long, HeartbeatInfo> copy;
           synchronized (heartbeats) {
-            LOG.debug("Process heartbeats: {} of host: {}", heartbeats, ksqlHostInfo);
             // 1. remove heartbeats older than window
             heartbeats.headMap(windowStart).clear();
             copy = new TreeMap<>(heartbeats.subMap(windowStart, true, windowEnd, true));
+            LOG.debug("Process heartbeats: {} of host: {}, window start: {}, window end: {}",
+                      copy, ksqlHostInfo, windowStart, windowEnd);
           }
           // 2. count consecutive missed heartbeats and mark as alive or dead
           final  boolean isAlive = decideStatus(ksqlHostInfo, windowStart, windowEnd, copy);
@@ -285,6 +286,9 @@ public final class HeartbeatAgent {
         }
         if (ts - config.heartbeatSendIntervalMs > prev) {
           missedCount = (ts - prev - 1) / config.heartbeatSendIntervalMs;
+          LOG.debug("Host: {} missed: {} heartbeats, current heartbeat: {}, previous heartbeat: {},"
+                        + " send interval: {}.",
+                    ksqlHostInfo, missedCount, ts, prev, config.heartbeatSendIntervalMs);
         } else {
           //Reset missed count when we receive heartbeat
           missedCount = 0;
@@ -294,6 +298,9 @@ public final class HeartbeatAgent {
       // Check frame from last received heartbeat to window end
       if (windowEnd - prev - 1 > 0) {
         missedCount = (windowEnd - prev - 1) / config.heartbeatSendIntervalMs;
+        LOG.debug("Host: {} missed: {} heartbeats, window end: {}, previous heartbeat: {},"
+                      + " send interval: {}.",
+                  ksqlHostInfo, missedCount, windowEnd, prev, config.heartbeatSendIntervalMs);
       }
       LOG.debug("Host: {} has {} missing heartbeats", ksqlHostInfo, missedCount);
       return (missedCount < config.heartbeatMissedThreshold);

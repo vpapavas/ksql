@@ -199,7 +199,7 @@ public final class KsqlTarget {
   ) {
     execute(HttpMethod.POST, path, jsonEntity, (resp, vcf) -> {
     }).exceptionally(t -> {
-      log.error("Unexpected exception in async request", t);
+      //log.error("Unexpected exception in async request", t);
       return null;
     });
   }
