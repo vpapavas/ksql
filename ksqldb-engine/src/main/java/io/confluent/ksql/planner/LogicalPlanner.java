@@ -61,6 +61,7 @@ import io.confluent.ksql.planner.plan.JoinNode;
 import io.confluent.ksql.planner.plan.JoinNode.JoinKey;
 import io.confluent.ksql.planner.plan.KsqlBareOutputNode;
 import io.confluent.ksql.planner.plan.KsqlStructuredDataOutputNode;
+import io.confluent.ksql.planner.plan.LogicalTerm;
 import io.confluent.ksql.planner.plan.OutputNode;
 import io.confluent.ksql.planner.plan.PlanNode;
 import io.confluent.ksql.planner.plan.PlanNodeId;
@@ -200,6 +201,10 @@ public class LogicalPlanner {
         into.getName(),
         analysis.getOrReplace()
     );
+  }
+
+  private LogicalTerm translateTermExpresssion(final Expression expression) {
+
   }
 
   private Optional<WindowInfo> getWindowInfo() {
