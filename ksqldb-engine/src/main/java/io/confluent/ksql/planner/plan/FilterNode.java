@@ -19,12 +19,15 @@ import io.confluent.ksql.execution.builder.KsqlQueryBuilder;
 import io.confluent.ksql.execution.context.QueryContext.Stacker;
 import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
+import io.confluent.ksql.schema.ksql.LogicalTerm;
 import io.confluent.ksql.structured.SchemaKStream;
+import java.util.List;
 import java.util.Objects;
 
 public class FilterNode extends SingleSourcePlanNode {
 
   private final Expression predicate;
+  private List<LogicalTerm> conditions;
 
   public FilterNode(
       final PlanNodeId id,
@@ -43,6 +46,14 @@ public class FilterNode extends SingleSourcePlanNode {
   @Override
   public LogicalSchema getSchema() {
     return getSource().getSchema();
+  }
+
+  public void addCondition(LogicalTerm condition) {
+    conditions.add(condition);
+  }
+
+  public List<LogicalTerm>  getConditions() {
+    return conditions;
   }
 
   @Override

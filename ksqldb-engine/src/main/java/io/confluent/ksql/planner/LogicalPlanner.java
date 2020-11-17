@@ -31,6 +31,7 @@ import io.confluent.ksql.execution.ddl.commands.KsqlTopic;
 import io.confluent.ksql.execution.expression.tree.ColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.Expression;
 import io.confluent.ksql.execution.expression.tree.FunctionCall;
+import io.confluent.ksql.execution.expression.tree.Literal;
 import io.confluent.ksql.execution.expression.tree.QualifiedColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.UnqualifiedColumnReferenceExp;
 import io.confluent.ksql.execution.expression.tree.VisitParentExpressionVisitor;
@@ -53,6 +54,7 @@ import io.confluent.ksql.parser.tree.WindowExpression;
 import io.confluent.ksql.planner.JoinTree.Join;
 import io.confluent.ksql.planner.JoinTree.Leaf;
 import io.confluent.ksql.planner.plan.AggregateNode;
+import io.confluent.ksql.planner.plan.Constant;
 import io.confluent.ksql.planner.plan.DataSourceNode;
 import io.confluent.ksql.planner.plan.FilterNode;
 import io.confluent.ksql.planner.plan.FinalProjectNode;
@@ -61,7 +63,7 @@ import io.confluent.ksql.planner.plan.JoinNode;
 import io.confluent.ksql.planner.plan.JoinNode.JoinKey;
 import io.confluent.ksql.planner.plan.KsqlBareOutputNode;
 import io.confluent.ksql.planner.plan.KsqlStructuredDataOutputNode;
-import io.confluent.ksql.planner.plan.LogicalTerm;
+import io.confluent.ksql.schema.ksql.LogicalTerm;
 import io.confluent.ksql.planner.plan.OutputNode;
 import io.confluent.ksql.planner.plan.PlanNode;
 import io.confluent.ksql.planner.plan.PlanNodeId;
@@ -71,7 +73,9 @@ import io.confluent.ksql.planner.plan.ProjectNode;
 import io.confluent.ksql.planner.plan.SelectionUtil;
 import io.confluent.ksql.planner.plan.SuppressNode;
 import io.confluent.ksql.planner.plan.UserRepartitionNode;
+import io.confluent.ksql.planner.plan.function.AbstractFunctionCall;
 import io.confluent.ksql.schema.ksql.Column;
+import io.confluent.ksql.schema.ksql.Column.Namespace;
 import io.confluent.ksql.schema.ksql.ColumnNames;
 import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.LogicalSchema.Builder;
@@ -89,6 +93,7 @@ import io.confluent.ksql.serde.none.NoneFormat;
 import io.confluent.ksql.util.GrammaticalJoiner;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.KsqlException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -203,8 +208,61 @@ public class LogicalPlanner {
     );
   }
 
-  private LogicalTerm translateTermExpresssion(final Expression expression) {
+  private LogicalTerm translateTermExpresssion(final Expression expression, final PlanNode node) {
+    if (expression instanceof FunctionCall) {
+      return translateFunctionCall((FunctionCall)expression, node);
+    }
+    if (expression instanceof Literal) {
+      return translateLiteral((Literal)expression, node);
+    }
 
+    if (expression instanceof ColumnReferenceExp) {
+      return translateColumnReference((ColumnReferenceExp)expression, node);
+    }
+
+    throw new UnsupportedOperationException(String.format(
+        "Cannot translate expression %s appearing in node %s ", expression, node));
+  }
+
+  private LogicalTerm translateFunctionCall(final FunctionCall expression, final PlanNode node) {
+    List<LogicalTerm> arguments = new ArrayList<>();
+
+    for (Expression arg: expression.getArguments()) {
+      arguments.add(translateTermExpresssion(arg, node));
+    }
+
+    return new AbstractFunctionCall(expression.getName().text(), arguments);
+  }
+
+  private LogicalTerm translateLiteral(Literal expression, final PlanNode node) {
+    return new Constant(expression.getValue());
+  }
+
+  private LogicalTerm translateColumnReference(ColumnReferenceExp expression, final PlanNode node) {
+
+    final ColumnName name = expression.getColumnName();
+
+      // Infer information based on schema of node
+      if ( !node.getSchema().findColumn(name).isPresent()) {
+        throw new KsqlException(String.format(
+            "Column %s cannot resolved when building logical plan.", name));
+      }
+
+      final ExpressionTypeManager expressionTypeManager = new ExpressionTypeManager(
+          node.getSchema(),
+          metaStore
+      );
+      final SqlType expressionType = expressionTypeManager
+          .getExpressionSqlType(expression);
+
+      final boolean isKey = node.getSchema().isKeyColumn(name);
+      final int index = node.getSchema().findColumn(name).get().index();
+      // look at logical schema of node to determine namespace
+      return Column.of(
+          expression.getColumnName(),
+          expressionType,
+          isKey ? Namespace.KEY : Namespace.VALUE,
+          index);
   }
 
   private Optional<WindowInfo> getWindowInfo() {
@@ -359,7 +417,11 @@ public class LogicalPlanner {
 
     validator.validateFilterExpression(filterExpression);
 
-    return new FilterNode(new PlanNodeId("WhereFilter"), sourcePlanNode, filterExpression);
+    // TODO: rewrite condition to CNF
+    final FilterNode filterNode = new FilterNode(
+        new PlanNodeId("WhereFilter"), sourcePlanNode, filterExpression);
+    filterNode.addCondition(translateTermExpresssion(filterExpression, filterNode));
+    return filterNode;
   }
 
   private UserRepartitionNode buildUserRepartitionNode(

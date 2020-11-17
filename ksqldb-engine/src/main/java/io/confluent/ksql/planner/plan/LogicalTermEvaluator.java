@@ -17,15 +17,31 @@ package io.confluent.ksql.planner.plan;
 
 import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.planner.plan.function.AbstractFunctionCall;
+import io.confluent.ksql.schema.ksql.Column;
+import io.confluent.ksql.schema.ksql.LogicalSchema;
+import io.confluent.ksql.schema.ksql.LogicalTerm;
+import scala.collection.immutable.Stream.Cons;
 
 public class LogicalTermEvaluator {
 
-  public static Object evaluate(LogicalTerm term, GenericRow row) {
+  public static Object evaluate(
+      final LogicalSchema logicalSchema, final LogicalTerm term, final GenericRow row) {
+
+    if (term instanceof Constant) {
+      return ((Constant)term).getValue();
+    }
+    if (term instanceof Column) {
+      return evaluate(logicalSchema, (Column)term, row);
+    }
     if (term instanceof AbstractFunctionCall) {
       return ((AbstractFunctionCall)term).evaluateArguments(row);
-    } else {
-      throw new UnsupportedOperationException("Cannot evaluate the provided logical term " + term);
     }
+    throw new UnsupportedOperationException("Cannot evaluate the provided logical term " + term);
+  }
 
+  private Object evaluateColumn(
+      final LogicalSchema schema, final Column column, final GenericRow row) {
+
+    return row.values().get(column.index());
   }
 }

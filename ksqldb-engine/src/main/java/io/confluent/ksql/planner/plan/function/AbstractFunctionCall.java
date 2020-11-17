@@ -16,12 +16,13 @@
 package io.confluent.ksql.planner.plan.function;
 
 import io.confluent.ksql.GenericRow;
-import io.confluent.ksql.planner.plan.LogicalTerm;
+import io.confluent.ksql.schema.ksql.LogicalTerm;
 import io.confluent.ksql.planner.plan.LogicalTermEvaluator;
 import io.confluent.ksql.planner.plan.function.FunctionSignature.Argument;
 import io.confluent.ksql.util.KsqlException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class AbstractFunctionCall implements LogicalTerm {
 
@@ -30,7 +31,13 @@ public class AbstractFunctionCall implements LogicalTerm {
   private List<FunctionSignature> signatures;
 
   public AbstractFunctionCall(final String name) {
-    this.name = name;
+    this.name = Objects.requireNonNull(name);
+  }
+
+  public AbstractFunctionCall(final String name, final List<LogicalTerm> arguments) {
+    this.name = Objects.requireNonNull(name);
+    this.arguments = Objects.requireNonNull(arguments);
+    this.signatures = new ArrayList<>();
   }
 
   public void addFunctionSignature(FunctionSignature signature) {

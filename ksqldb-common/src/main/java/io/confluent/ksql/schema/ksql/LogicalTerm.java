@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.ksql.planner.plan;
+package io.confluent.ksql.schema.ksql;
 
 public interface LogicalTerm {
 

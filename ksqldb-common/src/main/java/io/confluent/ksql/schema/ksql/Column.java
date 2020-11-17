@@ -27,7 +27,7 @@ import java.util.Objects;
  * A named field within KSQL schema types.
  */
 @Immutable
-public final class Column implements SimpleColumn {
+public final class Column implements SimpleColumn, LogicalTerm {
 
   // The order of the enum defines the order of precedence of {@code LogicalScheam.findColumn}.
   public enum Namespace {
