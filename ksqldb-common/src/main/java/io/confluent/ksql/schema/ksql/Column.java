@@ -15,19 +15,21 @@
 
 package io.confluent.ksql.schema.ksql;
 
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import io.confluent.ksql.name.ColumnName;
 import io.confluent.ksql.schema.ksql.types.SqlDecimal;
 import io.confluent.ksql.schema.ksql.types.SqlType;
 import io.confluent.ksql.schema.utils.FormatOptions;
 import io.confluent.ksql.util.DecimalUtil;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * A named field within KSQL schema types.
  */
 @Immutable
-public final class Column implements SimpleColumn, LogicalTerm {
+public final class Column implements SimpleColumn, LogicalTerm, ColumnUsage {
 
   // The order of the enum defines the order of precedence of {@code LogicalScheam.findColumn}.
   public enum Namespace {
@@ -146,5 +148,10 @@ public final class Column implements SimpleColumn, LogicalTerm {
     final String fmtType = type.toString(formatOptions);
 
     return name.toString(formatOptions) + " " + fmtType + fmtNs;
+  }
+
+  @Override
+  public List<Column> getColumnsUsed() {
+    return ImmutableList.of(this);
   }
 }

@@ -24,23 +24,22 @@ import scala.collection.immutable.Stream.Cons;
 
 public class LogicalTermEvaluator {
 
-  public static Object evaluate(
-      final LogicalSchema logicalSchema, final LogicalTerm term, final GenericRow row) {
+  public static Object evaluate(final LogicalTerm term, final GenericRow row) {
 
     if (term instanceof Constant) {
       return ((Constant)term).getValue();
     }
     if (term instanceof Column) {
-      return evaluate(logicalSchema, (Column)term, row);
+      return evaluateColumn((Column)term, row);
     }
     if (term instanceof AbstractFunctionCall) {
-      return ((AbstractFunctionCall)term).evaluateArguments(row);
+      return ((AbstractFunctionCall)term).getFunction().evaluateArguments(
+          (AbstractFunctionCall)term, row);
     }
     throw new UnsupportedOperationException("Cannot evaluate the provided logical term " + term);
   }
 
-  private Object evaluateColumn(
-      final LogicalSchema schema, final Column column, final GenericRow row) {
+  private static Object evaluateColumn(final Column column, final GenericRow row) {
 
     return row.values().get(column.index());
   }

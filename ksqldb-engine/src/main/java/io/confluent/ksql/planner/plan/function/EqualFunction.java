@@ -19,7 +19,7 @@ import io.confluent.ksql.GenericRow;
 import io.confluent.ksql.schema.ksql.types.SqlTypes;
 import java.util.List;
 
-public class EqualFunction extends AbstractFunctionCall {
+public class EqualFunction extends AbstractFunction {
 
   public static final String NAME = "=";
 
@@ -45,8 +45,8 @@ public class EqualFunction extends AbstractFunctionCall {
     this.addFunctionSignature(signature);
   }
 
-  public Object evaluate(GenericRow row) {
-    List<Object> arg_values = evaluateArguments(row);
+  public Object evaluate(final AbstractFunctionCall call, final GenericRow row) {
+    List<Object> arg_values = evaluateArguments(call, row);
     Object left = arg_values.get(0);
     Object right = arg_values.get(1);
 

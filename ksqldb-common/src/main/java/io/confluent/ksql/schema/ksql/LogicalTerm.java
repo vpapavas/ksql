@@ -15,6 +15,6 @@
 
 package io.confluent.ksql.schema.ksql;
 
-public interface LogicalTerm {
+public interface LogicalTerm extends ColumnUsage {
 
 }

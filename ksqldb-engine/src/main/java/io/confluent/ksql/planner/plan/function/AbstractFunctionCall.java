@@ -15,64 +15,52 @@
 
 package io.confluent.ksql.planner.plan.function;
 
-import io.confluent.ksql.GenericRow;
+import io.confluent.ksql.schema.ksql.ColumnUsage;
+import io.confluent.ksql.schema.ksql.Column;
 import io.confluent.ksql.schema.ksql.LogicalTerm;
-import io.confluent.ksql.planner.plan.LogicalTermEvaluator;
-import io.confluent.ksql.planner.plan.function.FunctionSignature.Argument;
-import io.confluent.ksql.util.KsqlException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
-public class AbstractFunctionCall implements LogicalTerm {
+public class AbstractFunctionCall implements LogicalTerm, ColumnUsage {
 
-  private final String name;
+  private String name;
   private List<LogicalTerm> arguments;
-  private List<FunctionSignature> signatures;
+  private FunctionSignature signature;
 
-  public AbstractFunctionCall(final String name) {
-    this.name = Objects.requireNonNull(name);
+  public AbstractFunctionCall() {
+    this.arguments = new ArrayList<>();
   }
 
-  public AbstractFunctionCall(final String name, final List<LogicalTerm> arguments) {
-    this.name = Objects.requireNonNull(name);
-    this.arguments = Objects.requireNonNull(arguments);
-    this.signatures = new ArrayList<>();
+  public AbstractFunction getFunction() {
+    return FunctionRegistry.getInstance().getFunction(name);
   }
 
-  public void addFunctionSignature(FunctionSignature signature) {
-    this.signatures.add(signature);
+  public FunctionSignature getFunctionSignature() {
+    return signature;
   }
 
-  public List<Object> evaluateArguments(GenericRow row) {
-    List<Object> argument_values = new ArrayList<>();
-    boolean found = true;
-    for(LogicalTerm arg: arguments) {
-      Object value = LogicalTermEvaluator.evaluate(arg, row);
-      argument_values.add(value);
-    }
+  public List<LogicalTerm> getArguments() {
+    return arguments;
+  }
 
-    // Identify function signature based on argument data types
-    FunctionSignature actual_signature = null;
-    for(FunctionSignature sig: signatures) {
-      List<Argument> args = sig.getArguments();
-      for(int i=0; i< args.size(); i++) {
-        // TODO: check if java type at runtime can be cast to sql type of function signature
-        if (args.get(i) != argument_values.get(i)) {
-          found = false;
-        }
-      }
-      if (found) {
-        actual_signature = sig;
-      }
-    }
+  public void addArgument(LogicalTerm arg) {
+    arguments.add(arg);
+  }
 
-    if (actual_signature == null) {
-      throw new KsqlException(String.format(
-          "No matching function signature for function %s and argument data types %s",
-          name, argument_values));
-    }
+  public void setName(final String name) {
+    this.name = name;
+  }
 
-    return argument_values;
+  public void setSignature(final FunctionSignature signature) {
+    this.signature = signature;
+  }
+
+  @Override
+  public List<Column> getColumnsUsed() {
+    final List<Column> columns = new ArrayList<>();
+    for (LogicalTerm arg: arguments) {
+      columns.addAll(arg.getColumnsUsed());
+    }
+    return columns;
   }
 }

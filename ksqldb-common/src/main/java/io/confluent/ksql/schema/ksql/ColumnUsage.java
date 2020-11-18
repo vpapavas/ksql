@@ -13,30 +13,12 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.ksql.planner.plan;
+package io.confluent.ksql.schema.ksql;
 
-import com.google.common.collect.ImmutableList;
 import io.confluent.ksql.schema.ksql.Column;
-import io.confluent.ksql.schema.ksql.ColumnUsage;
-import io.confluent.ksql.schema.ksql.LogicalTerm;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
-public class Constant implements LogicalTerm, ColumnUsage {
+public interface ColumnUsage {
 
-  private final Object value;
-
-  public Constant(final Object value) {
-    this.value = Objects.requireNonNull(value);
-  }
-
-  public Object getValue() {
-    return value;
-  }
-
-  @Override
-  public List<Column> getColumnsUsed() {
-    return Collections.emptyList();
-  }
+  List<Column> getColumnsUsed();
 }
