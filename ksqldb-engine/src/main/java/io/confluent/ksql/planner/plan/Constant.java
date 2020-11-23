@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.ksql.schema.ksql.Column;
 import io.confluent.ksql.schema.ksql.ColumnUsage;
 import io.confluent.ksql.schema.ksql.LogicalTerm;
+import io.confluent.ksql.schema.ksql.types.SqlType;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -26,13 +27,19 @@ import java.util.Objects;
 public class Constant implements LogicalTerm, ColumnUsage {
 
   private final Object value;
+  private final SqlType type;
 
-  public Constant(final Object value) {
+  public Constant(final Object value, final SqlType type) {
     this.value = Objects.requireNonNull(value);
+    this.type = Objects.requireNonNull(type);
   }
 
   public Object getValue() {
     return value;
+  }
+
+  public SqlType getType() {
+    return type;
   }
 
   @Override

@@ -16,9 +16,16 @@
 package io.confluent.ksql.planner.plan.function;
 
 import io.confluent.ksql.GenericRow;
+import io.confluent.ksql.function.types.ParamTypes;
 import io.confluent.ksql.planner.plan.LogicalTermEvaluator;
-import io.confluent.ksql.planner.plan.function.FunctionSignature.Argument;
+import io.confluent.ksql.planner.plan.function.FunctionSignature.Parameter;
+import io.confluent.ksql.schema.ksql.DefaultSqlValueCoercer;
+import io.confluent.ksql.schema.ksql.JavaToSqlTypeConverter;
+import io.confluent.ksql.schema.ksql.LogicalSchema;
 import io.confluent.ksql.schema.ksql.LogicalTerm;
+import io.confluent.ksql.schema.ksql.SqlValueCoercer.Result;
+import io.confluent.ksql.schema.ksql.types.SqlBaseType;
+import io.confluent.ksql.schema.ksql.types.SqlType;
 import io.confluent.ksql.util.KsqlException;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,26 +52,30 @@ public abstract class AbstractFunction {
     this.signatures.add(signature);
   }
 
-  public List<Object> evaluateArguments(final AbstractFunctionCall call, final GenericRow row) {
+  public abstract Object evaluate(final AbstractFunctionCall call, final GenericRow row);
+
+  public List<Object> evaluateArguments(
+      final AbstractFunctionCall call, final LogicalSchema schema, final GenericRow row) {
     List<Object> argument_values = new ArrayList<>();
     boolean found = true;
     for(LogicalTerm arg: call.getArguments()) {
-      Object value = LogicalTermEvaluator.evaluate(arg, row);
+      Object value = LogicalTermEvaluator.evaluate(schema, arg, row);
       argument_values.add(value);
     }
 
     // Identify function signature based on argument data types
     FunctionSignature actual_signature = null;
     for(FunctionSignature sig: signatures) {
-      List<Argument> args = sig.getArguments();
+      List<Parameter> args = sig.getParameters();
       for(int i=0; i< args.size(); i++) {
-        // TODO: check if java type at runtime can be cast to sql type of function signature
-        if (args.get(i) != argument_values.get(i)) {
+        SqlBaseType sqlType = JavaToSqlTypeConverter.instance().toSqlType(argument_values.get(i).getClass());
+        if (!sqlType.canImplicitlyCast(args.get(i).getType())) {
           found = false;
         }
       }
       if (found) {
         actual_signature = sig;
+        break;
       }
     }
 

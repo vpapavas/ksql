@@ -24,7 +24,8 @@ import scala.collection.immutable.Stream.Cons;
 
 public class LogicalTermEvaluator {
 
-  public static Object evaluate(final LogicalTerm term, final GenericRow row) {
+  public static Object evaluate(
+      final LogicalSchema schema, final LogicalTerm term, final GenericRow row) {
 
     if (term instanceof Constant) {
       return ((Constant)term).getValue();
@@ -33,7 +34,7 @@ public class LogicalTermEvaluator {
       return evaluateColumn((Column)term, row);
     }
     if (term instanceof AbstractFunctionCall) {
-      return ((AbstractFunctionCall)term).getFunction().evaluateArguments(
+      return ((AbstractFunctionCall)term).getFunction().evaluate(
           (AbstractFunctionCall)term, row);
     }
     throw new UnsupportedOperationException("Cannot evaluate the provided logical term " + term);
@@ -43,4 +44,5 @@ public class LogicalTermEvaluator {
 
     return row.values().get(column.index());
   }
+
 }

@@ -255,9 +255,9 @@ public class LogicalPlanner {
       final SqlType expressionType = expressionTypeManager
           .getExpressionSqlType(expression);
 
-      final boolean isKey = node.getSchema().isKeyColumn(name);
-      final int index = node.getSchema().findColumn(name).get().index();
-      // look at logical schema of node to determine namespace
+    // look at logical schema of node to determine namespace
+    final boolean isKey = node.getSchema().isKeyColumn(name);
+    final int index = node.getSchema().findColumn(name).get().index();
       return Column.of(
           expression.getColumnName(),
           expressionType,

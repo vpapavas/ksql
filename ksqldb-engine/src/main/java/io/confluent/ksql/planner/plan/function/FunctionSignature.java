@@ -15,7 +15,8 @@
 
 package io.confluent.ksql.planner.plan.function;
 
-import io.confluent.ksql.schema.ksql.types.SqlType;
+import io.confluent.ksql.function.types.ParamType;
+import io.confluent.ksql.schema.ksql.types.SqlBaseType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,38 +24,46 @@ import java.util.List;
 public class FunctionSignature {
 
   private final String name;
-  private List<Argument> arguments;
-  private SqlType return_type;
+  private List<Parameter> parameters;
+  private SqlBaseType return_type;
 
   public FunctionSignature(final String name,
-                           final List<Argument> arguments,
-                           final SqlType return_type) {
+                           final List<Parameter> parameters,
+                           final SqlBaseType return_type) {
     this.name = name;
-    this.arguments = arguments;
+    this.parameters = parameters;
     this.return_type = return_type;
   }
 
   public FunctionSignature(final String name,
-                           final SqlType return_type,
-                           final Argument... arguments) {
+                           final SqlBaseType return_type,
+                           final Parameter... parameters) {
     this.name = name;
     this.return_type = return_type;
-    this.arguments = (arguments.length == 0) ? new ArrayList<>() : Arrays.asList(arguments);
+    this.parameters = (parameters.length == 0) ? new ArrayList<>() : Arrays.asList(parameters);
   }
 
-  public void addArgument(String name, SqlType type) {
-    arguments.add(new Argument(name, type));
+  public String getName() {
+    return name;
   }
 
-  public List<Argument> getArguments() {
-    return arguments;
+  public SqlBaseType getReturn_type() {
+    return return_type;
   }
 
-  public static class Argument {
+  public void addParameter(String name, SqlBaseType type) {
+    parameters.add(new Parameter(name, type));
+  }
+
+  public List<Parameter> getParameters() {
+    return parameters;
+  }
+
+  public static class Parameter {
     private String name;
-    private SqlType type;
+    private SqlBaseType type;
 
-    public Argument(final String name, final SqlType type) {
+    public Parameter(final String name, final SqlBaseType type) {
       this.name = name;
       this.type = type;
     }
@@ -63,7 +72,7 @@ public class FunctionSignature {
       return name;
     }
 
-    public SqlType getType() {
+    public SqlBaseType getType() {
       return type;
     }
   }

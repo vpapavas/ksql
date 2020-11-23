@@ -31,6 +31,11 @@ public class AbstractFunctionCall implements LogicalTerm, ColumnUsage {
     this.arguments = new ArrayList<>();
   }
 
+  public AbstractFunctionCall(final String name, final List<LogicalTerm> arguments) {
+    this.name = name;
+    this.arguments = arguments;
+  }
+
   public AbstractFunction getFunction() {
     return FunctionRegistry.getInstance().getFunction(name);
   }
